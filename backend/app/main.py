@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from app.store import Store
 from app.audio import diarize_turns, prepare_audio, transcribe_turns
 from app.process import process_recording
-from app.extract import extract_draft, ollama_chat
+from app.extract import extract_draft, llama_chat
 from app.export import export_draft
 from app.review import validate_review
 
@@ -86,10 +86,14 @@ def create_app(db_path: Path, storage_dir: Path, processor: Callable | None = No
                 with tempfile.TemporaryDirectory() as temporary:
                     wav = Path(temporary) / "model-input.wav"
                     prepare_audio(source, wav)
+                    speaker_intervals = diarize_turns(wav)
+                    if not speaker_intervals:
+                        raise ValueError("No speech detected; inspect the recording")
                     result = process_recording(
                         wav, meeting["meeting_date"], meeting["roster"],
-                        transcribe_turns, diarize_turns,
-                        lambda turns, day, roster: extract_draft(turns, day, roster, ollama_chat),
+                        lambda _: transcribe_turns(wav, speaker_intervals),
+                        lambda _: speaker_intervals,
+                        lambda turns, day, roster: extract_draft(turns, day, roster, llama_chat),
                     )
             # Validate machine output at the same persisted seam as human edits.
             # Use its own transcript as the immutable timestamp baseline.
@@ -182,37 +186,6 @@ def create_app(db_path: Path, storage_dir: Path, processor: Callable | None = No
                     raise HTTPException(status_code=409, detail="Cannot edit while processing")
                 meeting = store.get(meeting_id)
                 editable = validate_review(meeting, editable)
-                if meeting["status"] == "review" and "actions" in editable:
-                    submitted = changes.get("actions", []) if isinstance(changes, dict) else []
-                    required = {"text", "assignee", "deadline_phrase", "due_date", "source_turn_ids",
-                                "confirmation_turn_ids", "needs_review", "confirmation_checked"}
-                    if "actions" in editable and any(not isinstance(action, dict) or not required <= action.keys()
-                                                       for action in submitted):
-                        raise HTTPException(status_code=422, detail="Incomplete action")
-                    old_actions = meeting["actions"]
-                    original_turns = {turn["id"]: turn.get("text") for turn in meeting["transcript"]}
-                    revised_turns = {turn["id"]: turn.get("text") for turn in editable.get(
-                        "transcript", meeting["transcript"]
-                    )}
-                    transcript_changed = "transcript" in editable and revised_turns != original_turns
-                    actions = editable["actions"]
-                    for index, action in enumerate(actions):
-                        old = old_actions[index] if index < len(old_actions) else {}
-                        changed = any(old.get(key) != action.get(key) for key in (
-                            "text", "assignee", "deadline_phrase", "due_date", "source_turn_ids",
-                            "confirmation_turn_ids",
-                        ))
-                        cited = set(old.get("source_turn_ids", [])) | set(old.get("confirmation_turn_ids", []))
-                        evidence_changed = transcript_changed and any(
-                            original_turns.get(turn_id) != revised_turns.get(turn_id) for turn_id in cited
-                        )
-                        if changed or evidence_changed:
-                            action["needs_review"] = True
-                            action["confirmation_checked"] = False
-                        else:
-                            state = submitted[index] if index < len(submitted) else old
-                            action["needs_review"] = state.get("needs_review", True)
-                            action["confirmation_checked"] = state.get("confirmation_checked", False)
                 return store.update(meeting_id, editable)
         except KeyError:
             raise HTTPException(status_code=404, detail="Meeting not found") from None

@@ -63,7 +63,7 @@ def main():
               'network_guard': 'Python process only; separate Ollama process not isolated'
               if args.deny_external_python_network else 'disabled',
               'baseline_gpu_mib': baseline, 'versions': {}}
-    for name in ('torch', 'torchaudio', 'transformers', 'pyannote.audio', 'huggingface-hub'):
+    for name in ('torch', 'torchaudio', 'faster-whisper', 'ctranslate2', 'pyannote.audio', 'huggingface-hub'):
         try:
             report['versions'][name] = importlib.metadata.version(name)
         except importlib.metadata.PackageNotFoundError:

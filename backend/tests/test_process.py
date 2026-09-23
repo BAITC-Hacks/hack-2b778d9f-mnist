@@ -49,44 +49,32 @@ def test_sequential_speakers_are_uncertain_without_overlap(short_wav):
     assert turn["speaker_id"] is None
 
 
-def test_incomplete_asr_timestamps_keep_text(short_wav, monkeypatch):
-    monkeypatch.setenv("ASR_MODEL_PATH", str(short_wav.parent))
-    chunks = [
-        {"text": "Начало", "timestamp": (None, 0.4)},
-        {"text": "Конец", "timestamp": (0.4, None)},
-    ]
-    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(
-        cuda=types.SimpleNamespace(is_available=lambda: False), float32="float32", float16="float16",
-    ))
-    monkeypatch.setitem(sys.modules, "transformers", types.SimpleNamespace(
-        AutoModelForSpeechSeq2Seq=types.SimpleNamespace(from_pretrained=lambda *a, **kw:
-            types.SimpleNamespace(generation_config=types.SimpleNamespace(language="kk"))),
-        AutoProcessor=types.SimpleNamespace(from_pretrained=lambda *a, **kw:
-            types.SimpleNamespace(tokenizer=object(), feature_extractor=object())),
-        pipeline=lambda *args, **kwargs: lambda *a, **kw: {"chunks": chunks}
-    ))
-    turns = transcribe_turns(short_wav)
-    assert [turn["text"] for turn in turns] == ["Начало", "Конец"]
+def test_transcription_keeps_text_and_source_window_bounds(short_wav, monkeypatch):
+    monkeypatch.setenv("ASR_MODEL_ARTIFACT", str(short_wav.parent))
+    for name in ("config.json", "model.bin", "tokenizer.json", "preprocessor_config.json"):
+        (short_wav.parent / name).write_text("{}")
+    monkeypatch.setattr("app.audio.check_model_dependencies", lambda _: None)
+    lengths = []
+    class Model:
+        def __init__(self, path, **kwargs):
+            assert path == str(short_wav.parent)
+            assert kwargs == {"device": "cpu", "compute_type": "int8", "local_files_only": True}
+        def transcribe(self, samples, **kwargs):
+            lengths.append(len(samples))
+            assert kwargs["language"] is None and kwargs["multilingual"]
+            assert kwargs["word_timestamps"]
+            text = "Начало" if len(lengths) == 1 else "Важное решение"
+            return iter([types.SimpleNamespace(start=0, end=len(samples)/16000, text=text)]), None
+    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
+    turns = transcribe_turns(short_wav, [(0, 0.4, "s0"), (0.4, 1.0, "s1")])
+    assert [turn["text"] for turn in turns] == ["Начало", "Важное решение"]
     assert [(turn["start"], turn["end"]) for turn in turns] == [(0.0, 0.4), (0.4, 1.0)]
-    assert all(turn["timestamp_uncertain"] for turn in turns)
+    assert lengths == [6400, 9600]
 
 
-def test_asr_text_without_chunks_is_kept(short_wav, monkeypatch):
+def test_silence_has_no_transcript_and_does_not_load_asr(short_wav, monkeypatch):
     monkeypatch.setenv("ASR_MODEL_PATH", str(short_wav.parent))
-    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(
-        cuda=types.SimpleNamespace(is_available=lambda: False), float32="float32", float16="float16",
-    ))
-    monkeypatch.setitem(sys.modules, "transformers", types.SimpleNamespace(
-        AutoModelForSpeechSeq2Seq=types.SimpleNamespace(from_pretrained=lambda *a, **kw:
-            types.SimpleNamespace(generation_config=types.SimpleNamespace(language="kk"))),
-        AutoProcessor=types.SimpleNamespace(from_pretrained=lambda *a, **kw:
-            types.SimpleNamespace(tokenizer=object(), feature_extractor=object())),
-        pipeline=lambda *args, **kwargs: lambda *a, **kw: {"text": "Важное решение"}
-    ))
-    turns = transcribe_turns(short_wav)
-    assert turns[0]["text"] == "Важное решение"
-    assert turns[0]["timestamp_uncertain"] is True
-    assert (turns[0]["start"], turns[0]["end"]) == (0.0, 1.0)
+    assert transcribe_turns(short_wav, []) == []
 
 
 def _wait_for_status(client, meeting_id, status):

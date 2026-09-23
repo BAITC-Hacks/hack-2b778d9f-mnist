@@ -31,3 +31,5 @@ meeting-data/
 *.sqlite-*
 
 .codex/
+
+*.gguf

@@ -27,15 +27,15 @@ python3 -m json.tool evaluation/simulated.json > /dev/null
 
 ## Прогон с изоляцией сети на уровне Linux
 
-`backend/scripts/offline_smoke.sh` создаёт новые user/network namespaces через `unshare --user --map-root-user --net`. В новом сетевом пространстве включается только loopback, запускается собственный `ollama serve`, затем тот же `brev_smoke.py`. Модельные процессы и конвертер наследуют это пространство. Скрипт проверяет изменение идентификатора namespace и не продолжает выполнение, если `unshare` запрещён. Это отдельная проверка от Python audit hook: ограничение одного Python-процесса не изолирует внешний Ollama.
+`backend/scripts/offline_smoke.sh` создаёт новые user/network namespaces через `unshare --user --map-root-user --net`. В новом сетевом пространстве включается только loopback, запускается собственный `llama-server`, затем тот же `brev_smoke.py`. Модельные процессы и конвертер наследуют это пространство. Скрипт проверяет изменение идентификатора namespace и не продолжает выполнение, если `unshare` запрещён. Это отдельная проверка от Python audit hook: ограничение одного Python-процесса не изолирует внешний llama-server.
 
-Перед запуском должны быть установлены `unshare`, `ip`, `curl`, Ollama и готовое Python-окружение; все веса предварительно загружены на машину. Каталоги ASR, pyannote и Ollama обязательны и должны быть доступны пользователю. Скрипт не скачивает модели. Для другого сервера заменить пути окружения:
+Перед запуском должны быть установлены `unshare`, `ip`, `curl`, llama-server и готовое Python-окружение; все веса предварительно загружены на машину. Каталоги ASR, pyannote и llama-server обязательны и должны быть доступны пользователю. Скрипт не скачивает модели. Для другого сервера заменить пути окружения:
 
 ```bash
 export MEETING_PYTHON=/data/venvs/project/bin/python
-export ASR_MODEL_PATH=/data/models/kazakh-whisper-large-v3-turbo
-export PYANNOTE_DIARIZATION_MODEL=/data/models/speaker-diarization-community-1
-export OLLAMA_MODELS=/usr/share/ollama/.ollama/models
+export ASR_MODEL_ARTIFACT=/data/models/whisper-large-v3-turbo-ct2
+export DIARIZATION_MODEL_ARTIFACT=/data/models/pyannote-speaker-diarization-3.1
+export MODEL_PATH=/absolute/path/Qwen3.5-4B-UD-Q6_K_XL.gguf
 
 bash backend/scripts/offline_smoke.sh 'track/Совещание №1.mp3' \
   --meeting-date 2026-09-23 \
@@ -52,7 +52,7 @@ bash backend/scripts/offline_smoke.sh 'track/Совещание №2.mp3' \
 
 Запускать команды из корня репозитория. `--result` содержит полный локальный результат: не переносить его в публичные артефакты без проверки. Дата в командах остаётся тестовой опорой. Для данного рабочего сеанса пользователь разрешил обработку обеих предоставленных записей на Brev.
 
-Изоляция обеспечивает отдельный localhost; уже работающий Ollama хоста не используется и не завершается. Обработчик `trap` останавливает только дочерний Ollama этого запуска. Переменные `MEETING_NETWORK_ISOLATION=linux_network_namespace` и `MEETING_NETWORK_NAMESPACE` передаются в runner для отчёта; сообщение stderr содержит идентификаторы пространств. Успешный запуск `unshare` проверяет доступность механизма. Доказательством работы конвейера без внешней сети является завершённый smoke внутри этого пространства с сохранённым отчётом, а не один запуск проверки namespace. Ошибку изоляции нельзя превращать в обычный сетевой прогон с отметкой offline.
+Изоляция обеспечивает отдельный localhost; уже работающий llama-server хоста не используется и не завершается. Обработчик `trap` останавливает только дочерний llama-server этого запуска. Переменные `MEETING_NETWORK_ISOLATION=linux_network_namespace` и `MEETING_NETWORK_NAMESPACE` передаются в runner для отчёта; сообщение stderr содержит идентификаторы пространств. Успешный запуск `unshare` проверяет доступность механизма. Доказательством работы конвейера без внешней сети является завершённый smoke внутри этого пространства с сохранённым отчётом, а не один запуск проверки namespace. Ошибку изоляции нельзя превращать в обычный сетевой прогон с отметкой offline.
 
 ## Как подготовить собственное аудио
 

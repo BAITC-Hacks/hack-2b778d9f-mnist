@@ -37,6 +37,7 @@ def test_fake_mp3_is_rejected_without_creating_record(tmp_path):
 
 def test_missing_local_model_fails_without_downloading(short_wav, monkeypatch):
     monkeypatch.delenv("ASR_MODEL_PATH", raising=False)
+    monkeypatch.delenv("ASR_MODEL_ARTIFACT", raising=False)
     with pytest.raises(RuntimeError, match="provisioned local"):
         transcribe_turns(short_wav)
 
