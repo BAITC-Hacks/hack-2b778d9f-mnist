@@ -1,0 +1,77 @@
+# --- Local model artifacts (never commit large binary weights) ---
+*.gguf
+
+# --- Secrets / local environment ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- Legacy scaffold scratch (not application source) ---
+workspace/
+
+# --- Editors / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+
+# Meeting application runtime and local model caches
+.venv-meeting/
+data/
+models/
+.cache/
+*.sqlite*
+
+# Additional local secrets and credential files
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+
+# Additional local model weights
+*.safetensors
+*.pt
+*.pth
+*.onnx
+*.ckpt
+pytorch_model*.bin
+model.bin
+
+# Local media and databases; existing tracked initial_data remains unchanged
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.flac
+*.ogg
+*.webm
+*.db
+*.db-wal
+*.db-shm
+
+# Temporary files
+*.tmp
+*.bak
+~$*

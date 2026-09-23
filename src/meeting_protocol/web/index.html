@@ -1,0 +1,4 @@
+﻿<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meeting protocols</title><link rel="stylesheet" href="/style.css"></head>
+<body><header><h1>Meeting protocols</h1><p>Local audio · speaker transcript · evidence-backed tasks</p><label>API key <input id="key" type="password" autocomplete="off"></label><button id="connect">Connect</button></header>
+<p id="error" role="alert"></p><main><aside><h2>Create meeting</h2><form id="create"><label>Title<input id="title" required maxlength="300"></label><label>Date<input id="date" type="date"></label><label>Participants (one per line)<textarea id="participants"></textarea></label><button>Create</button></form><h2>Meetings</h2><div id="meetings"></div></aside><article id="detail"><p>Select or create a meeting.</p></article></main><script src="/app.js"></script></body></html>
