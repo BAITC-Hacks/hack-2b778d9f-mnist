@@ -1,0 +1,1 @@
+{"name":"meeting-minutes-mvp","private":true,"version":"0.1.0","type":"module","scripts":{"dev":"vite","build":"tsc -b && vite build","test":"vitest run"},"dependencies":{"react":"*","react-dom":"*"},"devDependencies":{"@testing-library/react":"*","@types/react":"*","@types/react-dom":"*","@vitejs/plugin-react":"*","jsdom":"*","typescript":"*","vite":"*","vitest":"*"}}

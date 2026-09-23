@@ -1,0 +1,17 @@
+{
+  "asr": {
+    "repository": "shyngys879/kazakh-whisper-large-v3-turbo",
+    "revision": "dafae810c95496f66184605824be5a0a971d3c09",
+    "environment_variable": "ASR_MODEL_PATH"
+  },
+  "diarization": {
+    "repository": "pyannote/speaker-diarization-community-1",
+    "revision": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+    "environment_variable": "PYANNOTE_DIARIZATION_MODEL"
+  },
+  "ollama": {
+    "model": "qwen3:8b",
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "quantization": "Q4_K_M"
+  }
+}
