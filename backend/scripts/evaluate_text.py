@@ -151,7 +151,7 @@ def main(argv=None) -> int:
         ],
         "network": {
             "python_connections": "loopback_only",
-            "llama_process_isolation": "not_checked",
+            "ollama_process_isolation": "not_checked",
         },
         "cases": [],
     }
@@ -167,10 +167,10 @@ def main(argv=None) -> int:
             raise ValueError("Fixture IDs must be unique")
         report["fixture_provenance"] = data.get("provenance")
         sys.addaudithook(deny_external_connections)
-        from app.extract import extract_draft, llama_chat
+        from app.extract import extract_draft, ollama_chat
 
         def extract(turns, meeting_date, roster):
-            return extract_draft(turns, meeting_date, roster, llama_chat)
+            return extract_draft(turns, meeting_date, roster, ollama_chat)
 
         write_report(args.output, report)
         for fixture in fixtures:

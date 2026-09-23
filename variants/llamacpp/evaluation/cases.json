@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-23",
+  "paths_relative_to": "repository_root",
+  "purpose": "Раздельная оценка реального ASR, диаризации и извлечения; матрица не является отчётом о прогонах.",
+  "global_model_run_status": "pending",
+  "cases": [
+    {
+      "id": "track-1-ru",
+      "language": "ru",
+      "kind": "supplied_audio",
+      "audio_path": "track/Совещание №1.mp3",
+      "reference_path": "track/Протокол_совещания№1.docx.md",
+      "fixture_id": null,
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": false,
+      "audio_duration_seconds": 274.296,
+      "duration_source": "local ffprobe; not a model result",
+      "model_run_status": "pending",
+      "expected_actions": [
+        {
+          "id": "t1-a1",
+          "text": "Разработать единую стратегию закупа сырья",
+          "assignee": "Гульмира Сериковна",
+          "deadline_phrase": "до 15 октября",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a2",
+          "text": "Провести совещание с проектным институтом и согласовать поставку катализаторов",
+          "assignee": "Айнур Каировна",
+          "deadline_phrase": "до 26 сентября",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a3",
+          "text": "Подготовить финансовое решение по модернизации завода",
+          "assignee": "Тимур Болатович",
+          "deadline_phrase": "до 30 сентября",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a4",
+          "text": "Провести юридическую проверку штрафных санкций по контракту",
+          "assignee": "Юридический департамент",
+          "deadline_phrase": "до 30 сентября",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a5",
+          "text": "Представить сводный отчёт на следующем совещании",
+          "assignee": "Гульмира Сериковна",
+          "deadline_phrase": "к 20 октября",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a6",
+          "text": "Разобраться со срывом поверки подрядчиком и доложить лично",
+          "assignee": "Гульмира Сериковна",
+          "deadline_phrase": "до пятницы",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null,
+          "notes": "Расторжение договора условное: не считать отдельным безусловным поручением."
+        },
+        {
+          "id": "t1-a7",
+          "text": "Проверить датчики утечки и СИЗ на 11 площадках, представить отчёт",
+          "assignee": "Нурлан Сагатович",
+          "deadline_phrase": "к пятнадцатому октября",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null,
+          "notes": "Две недели заменены тремя; финальная календарная фраза без года."
+        },
+        {
+          "id": "t1-a8",
+          "text": "Провести внеплановый инструктаж по газоопасным работам с проверкой знаний",
+          "assignee": "Нурлан Сагатович",
+          "deadline_phrase": "на следующей неделе",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a9",
+          "text": "Согласовать закупки безопасности с инвестпланом без дублирования бюджета",
+          "assignee": "Тимур Болатович",
+          "deadline_phrase": "на этой неделе",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t1-a10",
+          "text": "Получить заключение юристов об основаниях претензии подрядчику",
+          "assignee": "Айнур Каировна",
+          "deadline_phrase": "к среде",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        }
+      ],
+      "summary_facts": [
+        "Загрузка мощностей 71%",
+        "Потери логистики до 8%",
+        "ТЭО готово на 60%",
+        "Аудит 11 площадок"
+      ],
+      "ambiguities": [
+        "Дата совещания и год календарных сроков не заданы.",
+        "Срок аудита меняется: две недели, три недели, 15 октября.",
+        "Недели являются интервалами; к среде требует контекста даты."
+      ],
+      "review_checks": [
+        "Все 10 смысловых групп сохранены либо пропуски перечислены.",
+        "Ответственный не заменён ведущим; юридический департамент допустим как исполнитель.",
+        "Условное расторжение договора не выдано за принятое безусловное решение."
+      ]
+    },
+    {
+      "id": "track-2-ru",
+      "language": "ru",
+      "kind": "supplied_audio",
+      "audio_path": "track/Совещание №2.mp3",
+      "reference_path": "track/Протокол_совещания№2.docx.md",
+      "fixture_id": null,
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": false,
+      "audio_duration_seconds": 206.064,
+      "duration_source": "local ffprobe; not a model result",
+      "model_run_status": "pending",
+      "expected_actions": [
+        {
+          "id": "t2-a1",
+          "text": "Подготовить претензию поставщику за срыв поставок",
+          "assignee": "Ерлан",
+          "deadline_phrase": "до конца недели",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null,
+          "notes": "Ерлан не выступает; финальное обобщение через Ботагоз и две недели неоднозначно. Нужна проверка назначения/срока."
+        },
+        {
+          "id": "t2-a2",
+          "text": "Найти альтернативного поставщика для сравнения условий",
+          "assignee": "Ботагоз Нурлановна",
+          "deadline_phrase": "за две недели",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t2-a3",
+          "text": "Провести совещание с подрядчиками и зафиксировать промежуточный график",
+          "assignee": "Жандос Талгатович",
+          "deadline_phrase": "на этой неделе",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t2-a4",
+          "text": "Представить краткую справку по итогам совещания с подрядчиками",
+          "assignee": "Жандос Талгатович",
+          "deadline_phrase": "по итогам этого совещания",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null
+        },
+        {
+          "id": "t2-a5",
+          "text": "Подготовить смету дополнительных групп и организацию обучения",
+          "assignee": "Ерболат Мухтарович",
+          "deadline_phrase": "за неделю",
+          "deadline_policy": "preserve_phrase_review",
+          "due_date": null,
+          "notes": "Неделя относится к смете; устранение очереди обучения — за месяц. Разделение на два действия допустимо с сохранением этих сроков."
+        },
+        {
+          "id": "t2-a6",
+          "text": "Подготовить уведомление подрядчикам и обновить шаблон договора",
+          "assignee": "Салтанат Ерболовна",
+          "deadline_phrase": null,
+          "deadline_policy": "absent",
+          "due_date": null,
+          "notes": "Пять рабочих дней — условие выставления счетов в договоре, не срок выполнения этого поручения."
+        }
+      ],
+      "summary_facts": [
+        "Выпуск 94% от плана",
+        "Освоение бюджета 68%",
+        "12% персонала с просроченными сертификатами"
+      ],
+      "ambiguities": [
+        "Дата совещания не задана.",
+        "Первоначальное назначение претензии Ерлану отличается от финального обобщения через Ботагоз.",
+        "Смета за неделю и устранение очереди обучения за месяц — разные результаты.",
+        "После совещания — событийный срок; пять рабочих дней — условие договора."
+      ],
+      "review_checks": [
+        "Неговорящий Ерлан может быть ответственным.",
+        "Последнему поручению не выдуманы срок или ISO дата.",
+        "Допустимо дробление группы обучения при сохранении разных сроков."
+      ]
+    },
+    {
+      "id": "simulated-ru",
+      "language": "ru",
+      "kind": "simulated_audio_pending",
+      "audio_path": null,
+      "reference_path": "evaluation/simulated.json",
+      "fixture_id": "simulated-ru",
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": true,
+      "model_run_status": "pending",
+      "expected_actions": [
+        {
+          "id": "ru-a1",
+          "text": "Подготовить сводку",
+          "assignee": "Алия",
+          "deadline_phrase": "до 25 сентября 2026 года",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-25",
+          "source_turn_ids": [
+            "ru1"
+          ],
+          "confirmation_turn_ids": [
+            "ru1"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "ambiguities": [],
+      "review_checks": [
+        "Только сводка является подтверждённым в речи поручением."
+      ]
+    },
+    {
+      "id": "simulated-kk",
+      "language": "kk",
+      "kind": "simulated_audio_pending",
+      "audio_path": null,
+      "reference_path": "evaluation/simulated.json",
+      "fixture_id": "simulated-kk",
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": true,
+      "model_run_status": "pending",
+      "expected_actions": [
+        {
+          "id": "kk-a1",
+          "text": "Есепті дайындау",
+          "assignee": "Дана",
+          "deadline_phrase": "ертең",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-24",
+          "source_turn_ids": [
+            "kk1"
+          ],
+          "confirmation_turn_ids": [
+            "kk1"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "ambiguities": [],
+      "review_checks": [
+        "Казахский смысл и дата завтра сохранены.",
+        "Сайт не объявлен утверждённым действием."
+      ]
+    },
+    {
+      "id": "simulated-mixed",
+      "language": "ru-kk",
+      "kind": "simulated_audio_pending",
+      "audio_path": null,
+      "reference_path": "evaluation/simulated.json",
+      "fixture_id": "simulated-mixed",
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": true,
+      "model_run_status": "pending",
+      "expected_actions": [
+        {
+          "id": "mix-a1",
+          "text": "Подготовить список рисков",
+          "assignee": "Марат",
+          "deadline_phrase": "ертең",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-24",
+          "source_turn_ids": [
+            "mix1"
+          ],
+          "confirmation_turn_ids": [
+            "mix1"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        },
+        {
+          "id": "mix-a2",
+          "text": "Проверить датчики",
+          "assignee": null,
+          "deadline_phrase": null,
+          "deadline_policy": "absent",
+          "due_date": null,
+          "source_turn_ids": [
+            "mix3"
+          ],
+          "confirmation_turn_ids": [
+            "mix3"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "ambiguities": [],
+      "review_checks": [
+        "Переход между языками не стирает действие или срок.",
+        "Для датчиков исполнитель и срок остаются null; roster не заполняет их автоматически."
+      ]
+    },
+    {
+      "id": "simulated-overlap",
+      "language": "ru-kk",
+      "kind": "simulated_audio_pending",
+      "audio_path": null,
+      "reference_path": "evaluation/simulated.json",
+      "fixture_id": "simulated-overlap",
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": true,
+      "model_run_status": "pending",
+      "expected_actions": [
+        {
+          "id": "ov-a1",
+          "text": "Отправить отчёт",
+          "assignee": "Алия",
+          "deadline_phrase": "завтра",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-24",
+          "source_turn_ids": [
+            "ov1",
+            "ov4"
+          ],
+          "confirmation_turn_ids": [
+            "ov1",
+            "ov4"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "ambiguities": [],
+      "review_checks": [
+        "Отметить реальную одновременную речь или неопределённость атрибуции.",
+        "Сохранить обе слышимые реплики либо явно отметить неразборчивость.",
+        "Неподтверждённая перебивающая реплика не заменяет срок."
+      ]
+    },
+    {
+      "id": "simulated-silence",
+      "language": "none",
+      "kind": "simulated_audio_pending",
+      "audio_path": null,
+      "reference_path": "evaluation/simulated.json",
+      "fixture_id": "simulated-silence",
+      "evaluation_meeting_date": "2026-09-23",
+      "meeting_date_is_reference_fact": true,
+      "model_run_status": "pending",
+      "expected_actions": [],
+      "ambiguities": [],
+      "review_checks": [
+        "Пустой транскрипт или понятный отказ без выдуманной речи, саммари и поручений."
+      ]
+    }
+  ]
+}

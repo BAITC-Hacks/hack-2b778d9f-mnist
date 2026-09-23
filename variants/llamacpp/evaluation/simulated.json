@@ -1,0 +1,360 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-09-23",
+  "provenance": "Собственные вымышленные сценарии для этого проекта; реальные лица и записи не использованы.",
+  "audio_status": "not_recorded",
+  "note": "Реплики и времена являются сценарием. Текстовая проверка извлечения не проверяет ASR или диаризацию.",
+  "fixtures": [
+    {
+      "id": "simulated-ru",
+      "language": "ru",
+      "meeting_date": "2026-09-23",
+      "participants": [
+        "Алия",
+        "Руслан"
+      ],
+      "speaker_names": {
+        "chair": "Руслан",
+        "speaker_a": "Алия"
+      },
+      "turns": [
+        {
+          "id": "ru1",
+          "start": 0,
+          "end": 6,
+          "expected_speaker_id": "chair",
+          "text": "Алия, подготовьте сводку до 25 сентября 2026 года.",
+          "overlap": false
+        },
+        {
+          "id": "ru2",
+          "start": 6,
+          "end": 10,
+          "expected_speaker_id": "speaker_a",
+          "text": "Подготовлю сводку к указанной дате.",
+          "overlap": false
+        },
+        {
+          "id": "ru3",
+          "start": 10,
+          "end": 15,
+          "expected_speaker_id": "speaker_a",
+          "text": "Предлагаю также обновить сайт.",
+          "overlap": false
+        },
+        {
+          "id": "ru4",
+          "start": 15,
+          "end": 19,
+          "expected_speaker_id": "chair",
+          "text": "Обновление сайта пока не поручаем.",
+          "overlap": false
+        }
+      ],
+      "expected_actions": [
+        {
+          "id": "ru-a1",
+          "text": "Подготовить сводку",
+          "assignee": "Алия",
+          "deadline_phrase": "до 25 сентября 2026 года",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-25",
+          "source_turn_ids": [
+            "ru1"
+          ],
+          "confirmation_turn_ids": [
+            "ru1"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "unconfirmed_proposals": [
+        {
+          "text": "Обновить сайт",
+          "source_turn_ids": [
+            "ru3"
+          ],
+          "must_not_be_confirmed": true
+        }
+      ],
+      "review_checks": [
+        "Только сводка является подтверждённым в речи поручением."
+      ],
+      "audio_path": null,
+      "audio_status": "not_recorded",
+      "timing_status": "script_plan_not_measured"
+    },
+    {
+      "id": "simulated-kk",
+      "language": "kk",
+      "meeting_date": "2026-09-23",
+      "participants": [
+        "Дана",
+        "Ермек"
+      ],
+      "speaker_names": {
+        "chair": "Ермек",
+        "speaker_a": "Дана"
+      },
+      "turns": [
+        {
+          "id": "kk1",
+          "start": 0,
+          "end": 6,
+          "expected_speaker_id": "chair",
+          "text": "Дана, ертең есепті дайындаңыз.",
+          "overlap": false
+        },
+        {
+          "id": "kk2",
+          "start": 6,
+          "end": 11,
+          "expected_speaker_id": "speaker_a",
+          "text": "Есепті ертең дайындаймын.",
+          "overlap": false
+        },
+        {
+          "id": "kk3",
+          "start": 11,
+          "end": 16,
+          "expected_speaker_id": "speaker_a",
+          "text": "Жаңа сайт жасасақ қалай болады?",
+          "overlap": false
+        },
+        {
+          "id": "kk4",
+          "start": 16,
+          "end": 22,
+          "expected_speaker_id": "chair",
+          "text": "Сайт туралы шешім кейін қабылданады.",
+          "overlap": false
+        }
+      ],
+      "expected_actions": [
+        {
+          "id": "kk-a1",
+          "text": "Есепті дайындау",
+          "assignee": "Дана",
+          "deadline_phrase": "ертең",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-24",
+          "source_turn_ids": [
+            "kk1"
+          ],
+          "confirmation_turn_ids": [
+            "kk1"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "unconfirmed_proposals": [
+        {
+          "text": "Жаңа сайт жасау",
+          "source_turn_ids": [
+            "kk3"
+          ],
+          "must_not_be_confirmed": true
+        }
+      ],
+      "review_checks": [
+        "Казахский смысл и дата завтра сохранены.",
+        "Сайт не объявлен утверждённым действием."
+      ],
+      "audio_path": null,
+      "audio_status": "not_recorded",
+      "timing_status": "script_plan_not_measured"
+    },
+    {
+      "id": "simulated-mixed",
+      "language": "ru-kk",
+      "meeting_date": "2026-09-23",
+      "participants": [
+        "Марат",
+        "Дана"
+      ],
+      "speaker_names": {
+        "chair": "Дана",
+        "speaker_a": "Марат"
+      },
+      "turns": [
+        {
+          "id": "mix1",
+          "start": 0,
+          "end": 7,
+          "expected_speaker_id": "chair",
+          "text": "Марат, ертең подготовьте список рисков.",
+          "overlap": false
+        },
+        {
+          "id": "mix2",
+          "start": 7,
+          "end": 13,
+          "expected_speaker_id": "speaker_a",
+          "text": "Жақсы, список рисков ертең дайын болады.",
+          "overlap": false
+        },
+        {
+          "id": "mix3",
+          "start": 13,
+          "end": 23,
+          "expected_speaker_id": "chair",
+          "text": "Поручаю проверить датчики; жауапты адам мен мерзім әлі белгіленбеген.",
+          "overlap": false
+        }
+      ],
+      "expected_actions": [
+        {
+          "id": "mix-a1",
+          "text": "Подготовить список рисков",
+          "assignee": "Марат",
+          "deadline_phrase": "ертең",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-24",
+          "source_turn_ids": [
+            "mix1"
+          ],
+          "confirmation_turn_ids": [
+            "mix1"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        },
+        {
+          "id": "mix-a2",
+          "text": "Проверить датчики",
+          "assignee": null,
+          "deadline_phrase": null,
+          "deadline_policy": "absent",
+          "due_date": null,
+          "source_turn_ids": [
+            "mix3"
+          ],
+          "confirmation_turn_ids": [
+            "mix3"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "unconfirmed_proposals": [],
+      "review_checks": [
+        "Переход между языками не стирает действие или срок.",
+        "Для датчиков исполнитель и срок остаются null; roster не заполняет их автоматически."
+      ],
+      "audio_path": null,
+      "audio_status": "not_recorded",
+      "timing_status": "script_plan_not_measured"
+    },
+    {
+      "id": "simulated-overlap",
+      "language": "ru-kk",
+      "meeting_date": "2026-09-23",
+      "participants": [
+        "Алия",
+        "Бота",
+        "Руслан"
+      ],
+      "speaker_names": {
+        "chair": "Руслан",
+        "speaker_a": "Алия",
+        "speaker_b": "Бота"
+      },
+      "turns": [
+        {
+          "id": "ov1",
+          "start": 0,
+          "end": 5,
+          "expected_speaker_id": "chair",
+          "text": "Алия, отправьте отчёт завтра.",
+          "overlap": false
+        },
+        {
+          "id": "ov2",
+          "start": 5,
+          "end": 10,
+          "expected_speaker_id": "speaker_a",
+          "text": "Отчёт отправлю завтра.",
+          "overlap": true
+        },
+        {
+          "id": "ov3",
+          "start": 7,
+          "end": 12,
+          "expected_speaker_id": "speaker_b",
+          "text": "Ертең емес, келесі аптада.",
+          "overlap": true
+        },
+        {
+          "id": "ov4",
+          "start": 12,
+          "end": 18,
+          "expected_speaker_id": "chair",
+          "text": "Срок остаётся завтра; изменение не подтверждаю.",
+          "overlap": false
+        }
+      ],
+      "expected_actions": [
+        {
+          "id": "ov-a1",
+          "text": "Отправить отчёт",
+          "assignee": "Алия",
+          "deadline_phrase": "завтра",
+          "deadline_policy": "exact_date",
+          "due_date": "2026-09-24",
+          "source_turn_ids": [
+            "ov1",
+            "ov4"
+          ],
+          "confirmation_turn_ids": [
+            "ov1",
+            "ov4"
+          ],
+          "classification": "confirmed_in_source",
+          "requires_human_review": true
+        }
+      ],
+      "unconfirmed_proposals": [
+        {
+          "text": "Перенести срок отчёта на следующую неделю",
+          "source_turn_ids": [
+            "ov3"
+          ],
+          "must_not_be_confirmed": true
+        }
+      ],
+      "expected_overlap_intervals": [
+        [
+          7,
+          10
+        ]
+      ],
+      "review_checks": [
+        "Отметить реальную одновременную речь или неопределённость атрибуции.",
+        "Сохранить обе слышимые реплики либо явно отметить неразборчивость.",
+        "Неподтверждённая перебивающая реплика не заменяет срок."
+      ],
+      "audio_path": null,
+      "audio_status": "not_recorded",
+      "timing_status": "script_plan_not_measured"
+    },
+    {
+      "id": "simulated-silence",
+      "language": "none",
+      "meeting_date": "2026-09-23",
+      "participants": [],
+      "speaker_names": {},
+      "turns": [],
+      "duration_seconds": 5,
+      "expected_actions": [],
+      "unconfirmed_proposals": [],
+      "review_checks": [
+        "Пустой транскрипт или понятный отказ без выдуманной речи, саммари и поручений."
+      ],
+      "audio_path": null,
+      "audio_status": "not_recorded",
+      "timing_status": "script_plan_not_measured"
+    }
+  ]
+}

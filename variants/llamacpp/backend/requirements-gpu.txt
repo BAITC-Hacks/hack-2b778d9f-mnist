@@ -1,0 +1,7 @@
+# Model stack aligned with origin/main b2f9eb8; real-model validation still required.
+# Install into a fresh environment. CUDA torch wheels depend on your machine.
+-r requirements.txt
+faster-whisper>=1.1,<2
+pyannote.audio>=3.4,<4
+soundfile>=0.13
+PyYAML>=6,<7

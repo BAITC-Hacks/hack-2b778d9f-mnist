@@ -65,3 +65,10 @@ def test_short_residual_is_rebalanced_within_maximum_input_length():
 def test_recording_with_only_micro_fragments_never_loads_asr(short_wav, tmp_path, monkeypatch):
     monkeypatch.setenv("ASR_MODEL_PATH", str(tmp_path))
     assert transcribe_turns(short_wav, [(0.2, 0.24, "a")]) == []
+
+
+def test_subsecond_diarization_fragments_receive_neighboring_context():
+    # Real 350–410 ms boundaries produced unrelated subtitle text on track-2.
+    # Keep their audio, with context, and let process_recording mark mixed voices.
+    windows = _speech_windows(10, [(0, 4, "a"), (4.1, 4.45, "b"), (4.5, 9, "a")])
+    assert windows == [(0, 4.45), (4.5, 9)]

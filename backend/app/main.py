@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from app.store import Store
 from app.audio import diarize_turns, prepare_audio, transcribe_turns
 from app.process import process_recording
-from app.extract import extract_draft, llama_chat
+from app.extract import extract_draft, ollama_chat
 from app.export import export_draft
 from app.review import validate_review
 
@@ -93,7 +93,7 @@ def create_app(db_path: Path, storage_dir: Path, processor: Callable | None = No
                         wav, meeting["meeting_date"], meeting["roster"],
                         lambda _: transcribe_turns(wav, speaker_intervals),
                         lambda _: speaker_intervals,
-                        lambda turns, day, roster: extract_draft(turns, day, roster, llama_chat),
+                        lambda turns, day, roster: extract_draft(turns, day, roster, ollama_chat),
                     )
             # Validate machine output at the same persisted seam as human edits.
             # Use its own transcript as the immutable timestamp baseline.

@@ -1,0 +1,22 @@
+{
+  "asr": {
+    "repository": "openai/whisper-large-v3-turbo",
+    "revision": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
+    "environment_variable": "ASR_MODEL_ARTIFACT",
+    "backend": "faster-whisper",
+    "artifact_format": "CTranslate2"
+  },
+  "diarization": {
+    "repository": "pyannote/speaker-diarization-3.1",
+    "backend": "pyannote.audio 3.x",
+    "environment_variable": "DIARIZATION_MODEL_ARTIFACT"
+  },
+  "reference": "origin/main@b2f9eb8",
+  "llm": {
+    "model": "Qwen3.5-4B-UD-Q6_K_XL",
+    "backend": "llama.cpp",
+    "artifact": "Qwen3.5-4B-UD-Q6_K_XL.gguf",
+    "environment_variable": "MODEL_PATH",
+    "served_alias": "qwen3.5-4b-local"
+  }
+}

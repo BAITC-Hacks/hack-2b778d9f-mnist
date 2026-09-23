@@ -5,7 +5,7 @@
 ## Что реализовано
 
 - Загрузка до 200 MiB и 10 минут; MP3 декодируется локальным ffmpeg в WAV до запуска моделей.
-- Локальные Whisper Large v3 Turbo, pyannote Diarization 3.1 и Qwen3.5-4B-UD-Q6_K_XL/llama.cpp. Один процесс сервера и одна очередь обработки, SQLite и файлы на диске.
+- Локальный `openai/whisper-large-v3-turbo` через Transformers, pyannote Community-1 и Qwen3-8B/Ollama. Один процесс сервера и одна очередь обработки, SQLite и файлы на диске.
 - Реплики с ID, временем, анонимным голосом и отметками неопределённости/наложения. Человек может исправить текст и назначить проверенное имя.
 - Поручения с исходными репликами, ответственным, фразой срока и однозначной датой. Имя в списке участников само по себе не подтверждает назначение. Неполные даты без года остаются на уточнение.
 - Правки сохраняются после перезапуска. Изменение реплик, участников или поручения снимает проверку: сначала сохраните исправления, затем повторно проверьте подтверждение поручения.
@@ -15,10 +15,10 @@
 
 ## Установка
 
-Набор моделей приведён к [main@b2f9eb8](https://github.com/BAITC-Hacks/hack-2b778d9f-mnist/tree/b2f9eb8). Нужны Python 3.12, Node 22, ffmpeg/ffprobe и llama-server с поддержкой выбранного Qwen GGUF. Для PDF дополнительно LibreOffice и шрифты с кириллицей и казахскими символами. Устанавливайте зависимости в новое окружение: прежнее окружение с pyannote 4 и Transformers не подходит. `backend/requirements-gpu.txt` содержит диапазоны из main; совместный запуск этих моделей на реальной записи ещё не проверен. По умолчанию распознавание и диаризация работают на CPU; для GPU задайте `ASR_DEVICE=cuda`, `ASR_COMPUTE_TYPE=float16`, `DIARIZATION_DEVICE=cuda` и установите совместимые CUDA-зависимости.
+Проверочный GPU: NVIDIA L40S 48 GB. Нужны Python 3.11, Node 22, ffmpeg/ffprobe, локальный Ollama. Для PDF дополнительно LibreOffice и шрифты с кириллицей и казахскими символами (например, DejaVu Sans). GPU-зависимости зафиксированы по подготовленной Brev-машине в `backend/requirements-gpu.txt`; это не измеренный минимум оборудования.
 
 ```bash
-python3.12 -m venv .venv
+python3.11 -m venv .venv
 . .venv/bin/activate
 python -m pip install -r backend/requirements-gpu.txt
 cd frontend
@@ -31,25 +31,29 @@ cd ..
 
 ## Подготовка моделей до отключения сети
 
-Используются три локальных артефакта:
-
-- `openai/whisper-large-v3-turbo`, преобразованный в CTranslate2 для faster-whisper. Каталог должен содержать `model.bin`, `config.json`, `tokenizer.json` (или `vocabulary.json`) и `preprocessor_config.json`. Исходный каталог Transformers не подходит. Подготовьте его по [инструкции faster-whisper](https://github.com/SYSTRAN/faster-whisper#model-conversion).
-- `pyannote/speaker-diarization-3.1`: полный каталог с `config.yaml` и весами segmentation/embedding. Примите условия доступа на Hugging Face при подготовке. В `pipeline.params.segmentation` и `embedding` должны стоять пути к локальным весам; относительные пути считаются от каталога конфигурации. Hub ID вместо локального файла отклоняется. Используется `pyannote.audio>=3.4,<4`, как в main.
-- Существующий `Qwen3.5-4B-UD-Q6_K_XL.gguf`: оставьте файл на месте и задайте `MODEL_PATH`. Веса не включаются в Git.
+Создайте абсолютные пути на сохраняемом диске. Примите условия доступа к Community-1 на Hugging Face и выполните `hf auth login` в своём окружении, если это требуется. Токен не помещайте в репозиторий.
 
 ```bash
-export ASR_MODEL_ARTIFACT="/absolute/path/models/whisper-large-v3-turbo-ct2"
-export DIARIZATION_MODEL_ARTIFACT="/absolute/path/models/pyannote-speaker-diarization-3.1"
-export MODEL_PATH="$PWD/Qwen3.5-4B-UD-Q6_K_XL.gguf"
-export LLM_BASE_URL=http://127.0.0.1:27362/v1
-export LLM_MODEL=qwen3.5-4b-local
-llama-server --model "$MODEL_PATH" --host 127.0.0.1 --port 27362 \
-  --alias "$LLM_MODEL" --ctx-size 8192 --n-gpu-layers 99
+export MEETING_MODELS="$PWD/models"
+export HF_HOME="$MEETING_MODELS/hf"
+export ASR_MODEL_PATH="$MEETING_MODELS/whisper-large-v3-turbo"
+export PYANNOTE_DIARIZATION_MODEL="$MEETING_MODELS/speaker-diarization-community-1"
+python - <<'PY'
+import json, os
+from pathlib import Path
+from huggingface_hub import snapshot_download
+models = json.loads(Path('backend/models.json').read_text())
+for name in ('asr', 'diarization'):
+    model = models[name]
+    snapshot_download(model['repository'], revision=model['revision'],
+                      local_dir=os.environ[model['environment_variable']])
+PY
+export OLLAMA_NO_CLOUD=1
+export OLLAMA_NOPRUNE=1
+ollama pull qwen3:8b
 ```
 
-Запустите llama-server в отдельном терминале; переменные путей экспортируйте и в терминале приложения. `MODEL_PATH` проверяется по ответу `/props` сервера, а `LLM_MODEL` — по `/v1/models`. Это проверка сообщённого сервером пути, а не хеша весов. Клиент использует `/v1/chat/completions` с JSON Schema, игнорирует proxy-переменные и запрещает перенаправления. Значения и источник выбора записаны в `backend/models.json`.
-
-Старые `ASR_MODEL_PATH` и `PYANNOTE_DIARIZATION_MODEL` поддерживаются как запасные имена переменных, но должны указывать на **новые совместимые артефакты**. Автоматической конвертации старых весов нет.
+Основной ASR — `openai/whisper-large-v3-turbo`, ревизия `41f01f3fe87f28c78e2fbf8b568835947dd65ed9`. Ревизии снимков и digest Ollama записаны в `backend/models.json`. Казахский fine-tune сохранён там как отдельный кандидат: приведённая команда его не загружает. Сравните digest после `ollama pull` с `http://127.0.0.1:11434/api/tags`: изменяемый тег может начать указывать на другие веса. Предзагрузка требует сети; обработка использует только локальные каталоги и `127.0.0.1:11434`. Если Ollama ещё не работает, запустите `ollama serve` в отдельном терминале.
 
 ## Запуск
 
@@ -95,10 +99,14 @@ PYTHONPATH=backend timeout 35m python backend/scripts/brev_smoke.py \
   --result meeting-data/result-1.json --deny-external-python-network
 ```
 
-Дата здесь — тестовый пример, не установленная дата исходной записи. Python network guard запрещает внешние соединения только процессу Python; для изоляции также llama-server используйте [проверку Linux network namespace](evaluation/README.md). Внешний `timeout` ограничивает зависшую модель: таймер ожидания ответа внутри программы сам вычисление не прерывает.
+Дата здесь — тестовый пример, не установленная дата исходной записи. Python network guard запрещает внешние соединения только процессу Python; для изоляции также Ollama используйте [проверку Linux network namespace](evaluation/README.md). Внешний `timeout` ограничивает зависшую модель: таймер ожидания ответа внутри программы сам вычисление не прерывает.
 
 ## Границы результата
 
-Казахская дообученная ASR-модель исключена из конфигурации по умолчанию после обнаруженных повторов на русской записи. Основная модель — исходный Whisper Large v3 Turbo; ошибки смешанной и одновременной речи всё ещё требуют проверки; валидный JSON не доказывает правильность поручения. Точные WER/CER, ошибки говорящих и полноту поручений измеряют на размеченных записях, а не по факту завершения обработки. Два примера трека не заменяют отдельную казахскую и смешанную запись с перебиваниями.
+Официальный Whisper Turbo выбран после диагностических прогонов на данных команды. Казахский fine-tune дал повторяющийся бессвязный текст на позднем фрагменте русской записи и сохранён как кандидат для отдельных испытаний. Реальные прогоны и обнаруженные ошибки описаны в [отчёте](evaluation/2026-09-23-results.md). После них изменено объединение коротких ASR-фрагментов; эта последняя правка проверена тестами, повторный GPU-прогон не завершён из-за потери SSH-доступа к Brev. Валидный JSON не доказывает правильность поручения. Точные WER/CER, ошибки говорящих и полноту поручений измеряют на размеченных записях, а не по факту завершения обработки. Два примера трека не заменяют отдельную казахскую и смешанную запись с перебиваниями.
 
 Состояние реальных прогонов и остающиеся проверки описаны в [плане](docs/implementation-plan.md). Live-подключение к Teams/Zoom/Meet, напоминания, СЭД и дашборд исполнения остаются следующим этапом после проверки обязательного сценария.
+
+## Альтернативный вариант
+
+В [variants/llamacpp](variants/llamacpp/README.md) сохранён отдельный снимок альтернативного стека: Whisper Turbo/CTranslate2, pyannote 3.1 и Qwen3.5-4B GGUF/llama.cpp. Это непроверенный вариант для дальнейшего сравнения. Его конфигурация и зависимости находятся внутри `variants/llamacpp`; основной запуск из этого README использует Transformers + Community-1 + Ollama/Qwen3-8B.

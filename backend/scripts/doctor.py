@@ -1,49 +1,43 @@
-"""Check local artifacts and the llama.cpp server without loading speech models."""
+"""Check installed tools, local weights and local inference before a demo."""
 import importlib.metadata
+import importlib.util
 import json
+import os
 from pathlib import Path
 import shutil
-import sys
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.audio import _local_model
-from app.model_artifacts import _validate_ct2_artifact, _validate_diarization_artifact, check_model_dependencies
-from app.extract import check_llama_server
+from urllib.request import ProxyHandler, build_opener
 
 
 def main():
-    checks = {name: bool(shutil.which(name)) for name in ("ffmpeg", "ffprobe")}
+    checks = {}
+    for name in ('ffmpeg', 'ffprobe'):
+        checks[name] = bool(shutil.which(name))
     versions = {}
-    for name in ("fastapi", "torch", "torchaudio", "faster-whisper", "ctranslate2", "pyannote.audio", "PyYAML"):
+    for name, module in [('fastapi', 'fastapi'), ('torch', 'torch'), ('torchaudio', 'torchaudio'),
+                         ('transformers', 'transformers'), ('pyannote.audio', 'pyannote')]:
         try:
             versions[name] = importlib.metadata.version(name)
-            checks[name] = True
+            checks[name] = importlib.util.find_spec(module) is not None
         except importlib.metadata.PackageNotFoundError:
             versions[name] = None
             checks[name] = False
-    errors = {}
-    for kind, variable, validate in (
-        ("asr", "ASR_MODEL_ARTIFACT", _validate_ct2_artifact),
-        ("diarization", "DIARIZATION_MODEL_ARTIFACT", _validate_diarization_artifact),
-    ):
-        try:
-            validate(_local_model(variable))
-            check_model_dependencies(kind)
-            checks[kind] = True
-        except Exception as error:
-            checks[kind] = False
-            errors[kind] = str(error)
+    for variable, files in [('ASR_MODEL_PATH', ['config.json', 'tokenizer_config.json']),
+                            ('PYANNOTE_DIARIZATION_MODEL', ['config.yaml'])]:
+        path = Path(os.environ.get(variable, '/nonexistent'))
+        checks[variable] = path.is_dir() and all((path / file).is_file() for file in files)
+        checks[variable + '_weights'] = path.is_dir() and any(
+            path.rglob('*.safetensors')) if variable == 'ASR_MODEL_PATH' else (
+            path.is_dir() and any(path.rglob('*.bin')))
     try:
-        check_llama_server()
-        checks["llama-server"] = True
-    except Exception as error:
-        checks["llama-server"] = False
-        errors["llama-server"] = str(error)
-    print(json.dumps({"ready": all(checks.values()), "checks": checks, "versions": versions,
-                      "errors": errors, "optional_pdf": bool(shutil.which("libreoffice")),
-                      "note": "Artifact and server-reported path checks only; real inference is not verified."}, indent=2))
+        with build_opener(ProxyHandler({})).open('http://127.0.0.1:11434/api/tags', timeout=5) as response:
+            checks['qwen3:8b'] = any(m['name'] == 'qwen3:8b' for m in json.load(response)['models'])
+    except Exception:
+        checks['qwen3:8b'] = False
+    print(json.dumps({'ready': all(checks.values()), 'checks': checks, 'versions': versions,
+                      'optional_pdf': bool(shutil.which('libreoffice')),
+                      'note': 'Artifact checks only. Run the real smoke to validate loading and quality.'}, indent=2))
     return 0 if all(checks.values()) else 1
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())

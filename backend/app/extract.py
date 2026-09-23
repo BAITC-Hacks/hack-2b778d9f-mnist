@@ -1,9 +1,6 @@
-"""Source-grounded draft extraction using the local llama.cpp service."""
+"""Source-grounded draft extraction using the local Ollama service."""
 
 import json
-import os
-from pathlib import Path
-from urllib.parse import urlsplit
 import re
 from datetime import date, timedelta
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -169,55 +166,18 @@ class _NoRedirects(HTTPRedirectHandler):
         raise ValueError("Local inference must not redirect requests")
 
 
-def llm_base_url() -> str:
-    value = os.environ.get("LLM_BASE_URL", "http://127.0.0.1:27362/v1").rstrip("/")
-    parsed = urlsplit(value)
-    if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
-            or parsed.username is not None or parsed.password is not None
-            or "?" in value or "#" in value):
-        raise ValueError("LLM_BASE_URL must be HTTP 127.0.0.1 without credentials or query")
-    return value
-
-
-def check_llama_server() -> None:
-    """Check the served alias and reported GGUF path, as in main's preflight."""
-    base = llm_base_url()
-    artifact = Path(os.environ.get("MODEL_PATH", "./Qwen3.5-4B-UD-Q6_K_XL.gguf")).expanduser().resolve()
-    if not artifact.is_file():
-        raise RuntimeError("Set MODEL_PATH to the existing local Qwen GGUF")
-    opener = build_opener(ProxyHandler({}), _NoRedirects())
-    with opener.open(base + "/models", timeout=5) as response:
-        models = json.load(response)
-    alias = os.environ.get("LLM_MODEL", "qwen3.5-4b-local")
-    if alias not in {item["id"] for item in models.get("data", [])}:
-        raise RuntimeError("llama-server is not serving LLM_MODEL")
-    root = base[:-3] if base.endswith("/v1") else base
-    with opener.open(root + "/props", timeout=5) as response:
-        reported = json.load(response).get("model_path", "")
-    if not reported or not Path(reported).is_absolute() or Path(reported).resolve() != artifact:
-        raise RuntimeError("llama-server model_path does not match MODEL_PATH")
-
-
-def llama_chat(messages: list[dict], schema: dict) -> dict:
-    check_llama_server()
+def ollama_chat(messages: list[dict], schema: dict) -> dict:
     request = Request(
-        llm_base_url() + "/chat/completions",
-        data=json.dumps({"model": os.environ.get("LLM_MODEL", "qwen3.5-4b-local"),
-                         "messages": messages,
-                         "response_format": {"type": "json_schema", "json_schema": {
-                             "name": "meeting_draft", "strict": True, "schema": schema}},
-                         "stream": False, "temperature": 0,
-                         "max_tokens": int(os.environ.get("LLM_MAX_OUTPUT_TOKENS", "2048"))}).encode(),
+        "http://127.0.0.1:11434/api/chat",
+        data=json.dumps({"model": "qwen3:8b", "messages": messages,
+                         "format": schema, "stream": False, "think": False,
+                         "options": {"temperature": 0, "num_ctx": 32768,
+                                     "num_predict": 8192}}).encode(),
         headers={"Content-Type": "application/json"}, method="POST",
     )
     # Ignore HTTP_PROXY and deny redirects so meeting text remains on loopback.
-    with build_opener(ProxyHandler({}), _NoRedirects()).open(
-        request, timeout=float(os.environ.get("LLM_TIMEOUT_SECONDS", "120")),
-    ) as response:
+    with build_opener(ProxyHandler({}), _NoRedirects()).open(request, timeout=600) as response:
         result = json.load(response)
-        choice = result["choices"][0]
-        if choice.get("finish_reason") != "stop":
-            raise ValueError("Local extraction did not complete; review a shorter recording")
-        content = re.sub(r"<think>.*?</think>", "", choice["message"]["content"], flags=re.DOTALL).strip()
-        content = re.sub(r"^```(?:json)?\s*|\s*```$", "", content).strip()
-        return json.loads(content)
+        if result.get("done_reason") == "length":
+            raise ValueError("Local extraction exceeded its output limit; review a shorter recording")
+        return json.loads(result["message"]["content"])

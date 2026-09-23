@@ -4,13 +4,12 @@ import math
 import os
 import subprocess
 import wave
-import tempfile
 
-from app.model_artifacts import _validate_ct2_artifact, _validate_diarization_artifact, check_model_dependencies
 from pathlib import Path
 
 
 MAX_AUDIO_SECONDS = 600
+MIN_ASR_SAMPLES = 8000  # Decode at least 0.5 s with neighboring context when available.
 
 
 def prepare_audio(source: Path, target: Path, *, allowed_formats: set[str] | None = None) -> float:
@@ -64,9 +63,7 @@ def prepare_audio(source: Path, target: Path, *, allowed_formats: set[str] | Non
 
 
 def _local_model(variable: str) -> Path:
-    legacy = {"ASR_MODEL_ARTIFACT": "ASR_MODEL_PATH",
-              "DIARIZATION_MODEL_ARTIFACT": "PYANNOTE_DIARIZATION_MODEL"}
-    value = os.environ.get(variable) or os.environ.get(legacy.get(variable, ""))
+    value = os.environ.get(variable)
     if not value or not Path(value).is_dir():
         raise RuntimeError(f"Set {variable} to a provisioned local model directory")
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -90,7 +87,7 @@ def _speech_windows(duration: float, speaker_intervals=None, *, max_seconds: flo
         raise ValueError("Invalid ASR window duration")
     total = round(duration * 16000)
     maximum = max(1, round(max_seconds * 16000))
-    minimum = 1600  # A fragment under 100 ms cannot support independent decoding.
+    minimum = MIN_ASR_SAMPLES
     merge_gap = 4800
     if speaker_intervals is None:
         regions = [(0, total, frozenset())]
@@ -140,67 +137,71 @@ def _speech_windows(duration: float, speaker_intervals=None, *, max_seconds: flo
 
 
 def transcribe_turns(wav: Path, speaker_intervals=None) -> list[dict]:
-    """Decode bounded speech windows with the local Whisper Turbo CT2 artifact."""
-    snapshot = _local_model("ASR_MODEL_ARTIFACT")
+    """Decode short speech windows; their source boundaries supply timestamps."""
+    snapshot = _local_model("ASR_MODEL_PATH")
     samples = _samples(wav)
     windows = _speech_windows(len(samples) / 16000, speaker_intervals)
-    if not windows or all(round(end * 16000) - round(start * 16000) < 1600
+    if not windows or all(round(end * 16000) - round(start * 16000) < MIN_ASR_SAMPLES
                           for start, end in windows):
         return []
-    _validate_ct2_artifact(snapshot)
-    check_model_dependencies("asr")
-    from faster_whisper import WhisperModel
+    import torch
+    from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
-    model = WhisperModel(
-        str(snapshot), device=os.environ.get("ASR_DEVICE", "cpu"),
-        compute_type=os.environ.get("ASR_COMPUTE_TYPE", "int8"), local_files_only=True,
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.float16 if device == "cuda" else torch.float32
+    model = AutoModelForSpeechSeq2Seq.from_pretrained(
+        str(snapshot), local_files_only=True, trust_remote_code=False, dtype=dtype,
+    ).to(device)
+    model.generation_config.language = None
+    processor = AutoProcessor.from_pretrained(
+        str(snapshot), local_files_only=True, trust_remote_code=False,
     )
     turns = []
     try:
         for start, end in windows:
-            segments, _ = model.transcribe(
-                samples[round(start * 16000):round(end * 16000)],
-                language=None, multilingual=True, word_timestamps=True,
-                vad_filter=True, condition_on_previous_text=False,
-            )
-            for segment in segments:
-                text = segment.text.strip()
-                if not text:
-                    continue
-                left, right = float(segment.start), float(segment.end)
-                if not (math.isfinite(left) and math.isfinite(right) and 0 <= left < right):
-                    raise ValueError("ASR returned invalid segment timestamps")
-                left, right = start + left, min(start + right, end)
-                if left >= right:
-                    raise ValueError("ASR returned timestamps outside its speech window")
-                turns.append({"id": f"t{len(turns) + 1}", "start": left, "end": right,
+            segment = samples[round(start * 16000):round(end * 16000)]
+            if len(segment) < MIN_ASR_SAMPLES:
+                turns.append({"id": f"t{len(turns) + 1}", "start": start, "end": end,
+                              "text": "[Короткий неразборчивый фрагмент]", "timestamp_uncertain": True})
+                continue
+            inputs = processor(
+                segment, sampling_rate=16000,
+                return_tensors="pt", return_attention_mask=True,
+            ).to(device)
+            inputs["input_features"] = inputs["input_features"].to(dtype)
+            with torch.inference_mode():
+                tokens = model.generate(
+                    **inputs, task="transcribe", return_timestamps=False,
+                    do_sample=False, max_new_tokens=440,
+                )
+            if len(tokens[0]) >= 440:
+                raise ValueError("ASR exceeded its output limit; review the recording")
+            text = processor.batch_decode(tokens, skip_special_tokens=True)[0].strip()
+            if text:
+                turns.append({"id": f"t{len(turns) + 1}", "start": start, "end": end,
                               "text": text, "timestamp_uncertain": False})
     finally:
-        del model
+        del model, processor
         gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     return turns
 
 
 def diarize_turns(wav: Path) -> list[tuple[float, float, str]]:
-    snapshot = _local_model("DIARIZATION_MODEL_ARTIFACT")
-    document = _validate_diarization_artifact(snapshot)
-    check_model_dependencies("diarization")
+    snapshot = _local_model("PYANNOTE_DIARIZATION_MODEL")
     import torch
-    import yaml
     from pyannote.audio import Pipeline
 
-    with tempfile.TemporaryDirectory(prefix="meeting-pipeline-") as temporary:
-        config = Path(temporary) / "config.yaml"
-        config.write_text(yaml.safe_dump(document), encoding="utf-8")
-        diarizer = Pipeline.from_pretrained(str(config))
-        try:
-            diarizer.to(torch.device(os.environ.get("DIARIZATION_DEVICE", "cpu")))
-            output = diarizer({"waveform": torch.from_numpy(_samples(wav)).unsqueeze(0), "sample_rate": 16000})
-        finally:
-            del diarizer
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+    diarizer = Pipeline.from_pretrained(str(snapshot))
+    diarizer.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    try:
+        output = diarizer({"waveform": torch.from_numpy(_samples(wav)).unsqueeze(0), "sample_rate": 16000})
+    finally:
+        del diarizer
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
     annotation = getattr(output, "speaker_diarization", output)
     return [
         (float(turn.start), float(turn.end), str(speaker))

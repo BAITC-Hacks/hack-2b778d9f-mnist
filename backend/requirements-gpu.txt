@@ -1,7 +1,21 @@
-# Model stack aligned with origin/main b2f9eb8; real-model validation still required.
-# Install into a fresh environment. CUDA torch wheels depend on your machine.
--r requirements.txt
-faster-whisper>=1.1,<2
-pyannote.audio>=3.4,<4
-soundfile>=0.13
-PyYAML>=6,<7
+# Direct dependencies measured on hackalem-gpu, 2026-09-23.
+# Standalone GPU environment: do not combine with requirements.txt constraints.
+# CUDA 12.6 wheels: https://pytorch.org/get-started/previous-versions/#v2110
+--extra-index-url https://download.pytorch.org/whl/cu126
+
+fastapi==0.141.1
+uvicorn==0.53.0
+python-multipart==0.0.32
+pytest==9.1.1
+httpx==0.28.1
+python-docx==1.2.0
+pydantic==2.13.5
+numpy==2.4.6
+torch==2.11.0+cu126
+torchaudio==2.11.0+cu126
+transformers==5.17.0
+pyannote.audio==4.0.7
+huggingface-hub==1.32.0
+# Exact measured CPU decoder wheel; CUDA model inference uses torch above.
+# Arbitrary equality prevents an extra-index +cu126 variant replacing this build.
+torchcodec===0.11.1

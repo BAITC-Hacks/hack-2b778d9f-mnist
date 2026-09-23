@@ -3,7 +3,7 @@
   "created_at": "2026-09-23",
   "paths_relative_to": "repository_root",
   "purpose": "Раздельная оценка реального ASR, диаризации и извлечения; матрица не является отчётом о прогонах.",
-  "global_model_run_status": "pending",
+  "global_model_run_status": "partially_evaluated",
   "cases": [
     {
       "id": "track-1-ru",
@@ -16,7 +16,7 @@
       "meeting_date_is_reference_fact": false,
       "audio_duration_seconds": 274.296,
       "duration_source": "local ffprobe; not a model result",
-      "model_run_status": "pending",
+      "model_run_status": "completed_with_quality_issues",
       "expected_actions": [
         {
           "id": "t1-a1",
@@ -116,7 +116,8 @@
         "Все 10 смысловых групп сохранены либо пропуски перечислены.",
         "Ответственный не заменён ведущим; юридический департамент допустим как исполнитель.",
         "Условное расторжение договора не выдано за принятое безусловное решение."
-      ]
+      ],
+      "pending_current_code_rerun": "ASR window minimum changed from 100 to 500 ms after measured run"
     },
     {
       "id": "track-2-ru",
@@ -129,7 +130,7 @@
       "meeting_date_is_reference_fact": false,
       "audio_duration_seconds": 206.064,
       "duration_source": "local ffprobe; not a model result",
-      "model_run_status": "pending",
+      "model_run_status": "completed_with_quality_issues",
       "expected_actions": [
         {
           "id": "t2-a1",
@@ -198,7 +199,8 @@
         "Неговорящий Ерлан может быть ответственным.",
         "Последнему поручению не выдуманы срок или ISO дата.",
         "Допустимо дробление группы обучения при сохранении разных сроков."
-      ]
+      ],
+      "pending_current_code_rerun": "ASR window minimum changed from 100 to 500 ms after measured run"
     },
     {
       "id": "simulated-ru",
@@ -231,7 +233,8 @@
       "ambiguities": [],
       "review_checks": [
         "Только сводка является подтверждённым в речи поручением."
-      ]
+      ],
+      "text_model_run_status": "completed_structure_only"
     },
     {
       "id": "simulated-kk",
@@ -265,7 +268,8 @@
       "review_checks": [
         "Казахский смысл и дата завтра сохранены.",
         "Сайт не объявлен утверждённым действием."
-      ]
+      ],
+      "text_model_run_status": "completed_structure_only"
     },
     {
       "id": "simulated-mixed",
@@ -315,7 +319,8 @@
       "review_checks": [
         "Переход между языками не стирает действие или срок.",
         "Для датчиков исполнитель и срок остаются null; roster не заполняет их автоматически."
-      ]
+      ],
+      "text_model_run_status": "completed_structure_only"
     },
     {
       "id": "simulated-overlap",
@@ -352,7 +357,8 @@
         "Отметить реальную одновременную речь или неопределённость атрибуции.",
         "Сохранить обе слышимые реплики либо явно отметить неразборчивость.",
         "Неподтверждённая перебивающая реплика не заменяет срок."
-      ]
+      ],
+      "text_model_run_status": "completed_structure_only"
     },
     {
       "id": "simulated-silence",
@@ -370,5 +376,6 @@
         "Пустой транскрипт или понятный отказ без выдуманной речи, саммари и поручений."
       ]
     }
-  ]
+  ],
+  "latest_report": "evaluation/2026-09-23-results.md"
 }

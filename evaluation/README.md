@@ -25,17 +25,65 @@ python3 -m json.tool evaluation/simulated.json > /dev/null
 
 Это проверяет формат данных, не модели. Для конкретного модельного запуска использовать команду smoke-проверки из README приложения и передавать выбранный `audio_path` и `evaluation_meeting_date`. Сохранить возвращённый ID совещания, его JSON и собственный отчёт. При отсутствии аудио у simulated-случая отметить `pending`; текстовый запуск извлечения можно выполнить отдельно и назвать проверкой извлечения из эталонного текста.
 
+## Извлечение из четырёх текстовых сценариев
+
+Заранее загрузите `qwen3:8b` и запустите локальный Ollama на `127.0.0.1:11434` по инструкции основного README. Из корня репозитория выполните:
+
+```bash
+export MEETING_PYTHON="${MEETING_PYTHON:-python3}"
+PYTHONPATH=backend "$MEETING_PYTHON" backend/scripts/evaluate_text.py \
+  --fixtures evaluation/simulated.json \
+  --output meeting-data/evaluation/text-report.json
+```
+
+Runner передаёт модели четыре готовых текста: RU, KK, mixed и сценарий с отмеченным наложением. Случай тишины пропускается. Аудио не распознаётся; обе перебивающие реплики уже присутствуют во входном тексте. Статус `completed` означает завершение извлечения и структурных проверок; смысл поручений, пропуски и ложные назначения проверяет человек по полям `fixture`, `actual` и `semantic_review`. Ограничение соединений этого Python-процесса не изолирует отдельный Ollama.
+
+## Короткие локальные MMS-TTS примеры
+
+`make_synthetic_audio.py` создаёт два отдельных коротких файла: одну казахскую фразу и монтаж казахской/русской фраз. Это дополнительные минимальные примеры; полные диалоги из `simulated.json`, многоголосное совещание и наложение этим скриптом не озвучиваются.
+
+Перед отключением сети подготовьте Python-окружение с GPU requirements проекта и заранее скачайте оба MMS checkpoint. Сам синтез выполняется на CPU. Пример подготовки с явными локальными каталогами:
+
+```bash
+export MEETING_PYTHON="${MEETING_PYTHON:-python3}"
+export MMS_TTS_KAZ_MODEL_PATH="$PWD/models/mms-tts-kaz"
+export MMS_TTS_RUS_MODEL_PATH="$PWD/models/mms-tts-rus"
+HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 "$MEETING_PYTHON" - <<'PY'
+import os
+from huggingface_hub import snapshot_download
+for language in ('kaz', 'rus'):
+    snapshot_download(
+        f'facebook/mms-tts-{language}',
+        local_dir=os.environ[f'MMS_TTS_{language.upper()}_MODEL_PATH'],
+    )
+PY
+```
+
+После подготовки синтез использует только локальные веса. Результаты сохраняются в игнорируемом Git каталоге `meeting-data/`:
+
+```bash
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 \
+  "$MEETING_PYTHON" backend/scripts/make_synthetic_audio.py \
+  --output-dir meeting-data/evaluation/mms-tts --seed 42 --threads 2
+```
+
+Создаются `kazakh.wav`, `mixed.wav` и `manifest.json` с исходным текстом, фактическими границами синтезированных частей, хешами весов/аудио и версиями библиотек. Для повторного запуска укажите новый выходной каталог: существующие файлы не перезаписываются. Сопоставляйте хеши и версии при воспроизведении; фиксированный seed не гарантирует одинаковые файлы в другом окружении.
+
+Прослушайте WAV перед оценкой распознавания: входной текст TTS может отличаться от реально слышимого. В mixed-файле смена языка совпадает со сменой синтетического голоса; он не подтверждает качество естественного code-switching или идентификацию участников. Для полного конвейера передайте любой из этих WAV в `offline_smoke.sh` с датой `2026-09-23`, отдельным `--data-dir` и локальными `--report`/`--result` по примеру ниже. Оценка извлечения из текста и обработка TTS-аудио должны иметь отдельные отчёты.
+
+Модели [MMS-TTS Kazakh](https://huggingface.co/facebook/mms-tts-kaz) и [MMS-TTS Russian](https://huggingface.co/facebook/mms-tts-rus) имеют лицензию CC-BY-NC-4.0; атрибуция включается в manifest. Эти модели используются для некоммерческой диагностики; участие в хакатоне само по себе не отменяет ограничение NonCommercial.
+
 ## Прогон с изоляцией сети на уровне Linux
 
-`backend/scripts/offline_smoke.sh` создаёт новые user/network namespaces через `unshare --user --map-root-user --net`. В новом сетевом пространстве включается только loopback, запускается собственный `llama-server`, затем тот же `brev_smoke.py`. Модельные процессы и конвертер наследуют это пространство. Скрипт проверяет изменение идентификатора namespace и не продолжает выполнение, если `unshare` запрещён. Это отдельная проверка от Python audit hook: ограничение одного Python-процесса не изолирует внешний llama-server.
+`backend/scripts/offline_smoke.sh` создаёт новые user/network namespaces через `unshare --user --map-root-user --net`. В новом сетевом пространстве включается только loopback, запускается собственный `Ollama`, затем тот же `brev_smoke.py`. Модельные процессы и конвертер наследуют это пространство. Скрипт проверяет изменение идентификатора namespace и не продолжает выполнение, если `unshare` запрещён. Это отдельная проверка от Python audit hook: ограничение одного Python-процесса не изолирует внешний Ollama.
 
-Перед запуском должны быть установлены `unshare`, `ip`, `curl`, llama-server и готовое Python-окружение; все веса предварительно загружены на машину. Каталоги ASR, pyannote и llama-server обязательны и должны быть доступны пользователю. Скрипт не скачивает модели. Для другого сервера заменить пути окружения:
+Перед запуском должны быть установлены `unshare`, `ip`, `curl`, `ollama` и готовое Python-окружение; все веса предварительно загружены на машину. Каталоги ASR, pyannote и Ollama обязательны и должны быть доступны пользователю. Скрипт не скачивает модели. Для другого сервера заменить пути окружения:
 
 ```bash
 export MEETING_PYTHON=/data/venvs/project/bin/python
-export ASR_MODEL_ARTIFACT=/data/models/whisper-large-v3-turbo-ct2
-export DIARIZATION_MODEL_ARTIFACT=/data/models/pyannote-speaker-diarization-3.1
-export MODEL_PATH=/absolute/path/Qwen3.5-4B-UD-Q6_K_XL.gguf
+export ASR_MODEL_PATH=/data/models/whisper-large-v3-turbo
+export PYANNOTE_DIARIZATION_MODEL=/data/models/speaker-diarization-community-1
+export OLLAMA_MODELS=/usr/share/ollama/.ollama/models
 
 bash backend/scripts/offline_smoke.sh 'track/Совещание №1.mp3' \
   --meeting-date 2026-09-23 \
@@ -52,7 +100,7 @@ bash backend/scripts/offline_smoke.sh 'track/Совещание №2.mp3' \
 
 Запускать команды из корня репозитория. `--result` содержит полный локальный результат: не переносить его в публичные артефакты без проверки. Дата в командах остаётся тестовой опорой. Для данного рабочего сеанса пользователь разрешил обработку обеих предоставленных записей на Brev.
 
-Изоляция обеспечивает отдельный localhost; уже работающий llama-server хоста не используется и не завершается. Обработчик `trap` останавливает только дочерний llama-server этого запуска. Переменные `MEETING_NETWORK_ISOLATION=linux_network_namespace` и `MEETING_NETWORK_NAMESPACE` передаются в runner для отчёта; сообщение stderr содержит идентификаторы пространств. Успешный запуск `unshare` проверяет доступность механизма. Доказательством работы конвейера без внешней сети является завершённый smoke внутри этого пространства с сохранённым отчётом, а не один запуск проверки namespace. Ошибку изоляции нельзя превращать в обычный сетевой прогон с отметкой offline.
+Изоляция обеспечивает отдельный localhost; уже работающий Ollama хоста не используется и не завершается. Обработчик `trap` останавливает только дочерний Ollama этого запуска. Переменные `MEETING_NETWORK_ISOLATION=linux_network_namespace` и `MEETING_NETWORK_NAMESPACE` передаются в runner для отчёта; сообщение stderr содержит идентификаторы пространств. Успешный запуск `unshare` проверяет доступность механизма. Доказательством работы конвейера без внешней сети является завершённый smoke внутри этого пространства с сохранённым отчётом, а не один запуск проверки namespace. Ошибку изоляции нельзя превращать в обычный сетевой прогон с отметкой offline.
 
 ## Как подготовить собственное аудио
 

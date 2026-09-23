@@ -2,21 +2,25 @@
   "asr": {
     "repository": "openai/whisper-large-v3-turbo",
     "revision": "41f01f3fe87f28c78e2fbf8b568835947dd65ed9",
-    "environment_variable": "ASR_MODEL_ARTIFACT",
-    "backend": "faster-whisper",
-    "artifact_format": "CTranslate2"
+    "environment_variable": "ASR_MODEL_PATH"
   },
   "diarization": {
-    "repository": "pyannote/speaker-diarization-3.1",
-    "backend": "pyannote.audio 3.x",
-    "environment_variable": "DIARIZATION_MODEL_ARTIFACT"
+    "repository": "pyannote/speaker-diarization-community-1",
+    "revision": "3533c8cf8e369892e6b79ff1bf80f7b0286a54ee",
+    "environment_variable": "PYANNOTE_DIARIZATION_MODEL"
   },
-  "reference": "origin/main@b2f9eb8",
-  "llm": {
-    "model": "Qwen3.5-4B-UD-Q6_K_XL",
-    "backend": "llama.cpp",
-    "artifact": "Qwen3.5-4B-UD-Q6_K_XL.gguf",
-    "environment_variable": "MODEL_PATH",
-    "served_alias": "qwen3.5-4b-local"
-  }
+  "ollama": {
+    "model": "qwen3:8b",
+    "digest": "500a1f067a9f782620b40bee6f7b0c89e17ae61f686b92c24933e4ca4b2b8b41",
+    "quantization": "Q4_K_M"
+  },
+  "asr_candidates": [
+    {
+      "repository": "shyngys879/kazakh-whisper-large-v3-turbo",
+      "revision": "dafae810c95496f66184605824be5a0a971d3c09",
+      "environment_variable": "ASR_CANDIDATE_MODEL_PATH",
+      "status": "candidate_not_default",
+      "note": "Late-window repetition and unusable full-recording output observed on supplied Russian meeting; retain for separate Kazakh evaluation."
+    }
+  ]
 }

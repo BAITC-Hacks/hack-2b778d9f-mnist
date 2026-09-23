@@ -50,26 +50,41 @@ def test_sequential_speakers_are_uncertain_without_overlap(short_wav):
 
 
 def test_transcription_keeps_text_and_source_window_bounds(short_wav, monkeypatch):
-    monkeypatch.setenv("ASR_MODEL_ARTIFACT", str(short_wav.parent))
-    for name in ("config.json", "model.bin", "tokenizer.json", "preprocessor_config.json"):
-        (short_wav.parent / name).write_text("{}")
-    monkeypatch.setattr("app.audio.check_model_dependencies", lambda _: None)
-    lengths = []
+    from contextlib import nullcontext
+    monkeypatch.setenv("ASR_MODEL_PATH", str(short_wav.parent))
+    class Tensor:
+        def to(self, *args):
+            return self
+    class Inputs(dict):
+        def to(self, *args):
+            return self
+    class Processor:
+        def __init__(self):
+            self.lengths = []
+        def __call__(self, samples, **kwargs):
+            self.lengths.append(len(samples))
+            return Inputs(input_features=Tensor(), attention_mask=Tensor())
+        def batch_decode(self, tokens, **kwargs):
+            return ["Начало" if len(self.lengths) == 1 else "Важное решение"]
     class Model:
-        def __init__(self, path, **kwargs):
-            assert path == str(short_wav.parent)
-            assert kwargs == {"device": "cpu", "compute_type": "int8", "local_files_only": True}
-        def transcribe(self, samples, **kwargs):
-            lengths.append(len(samples))
-            assert kwargs["language"] is None and kwargs["multilingual"]
-            assert kwargs["word_timestamps"]
-            text = "Начало" if len(lengths) == 1 else "Важное решение"
-            return iter([types.SimpleNamespace(start=0, end=len(samples)/16000, text=text)]), None
-    monkeypatch.setitem(sys.modules, "faster_whisper", types.SimpleNamespace(WhisperModel=Model))
-    turns = transcribe_turns(short_wav, [(0, 0.4, "s0"), (0.4, 1.0, "s1")])
+        generation_config = types.SimpleNamespace(language="kk")
+        def to(self, *args):
+            return self
+        def generate(self, **kwargs):
+            return [[1, 2, 3]]
+    processor = Processor()
+    monkeypatch.setitem(sys.modules, "torch", types.SimpleNamespace(
+        cuda=types.SimpleNamespace(is_available=lambda: False),
+        float32="float32", float16="float16", inference_mode=nullcontext,
+    ))
+    monkeypatch.setitem(sys.modules, "transformers", types.SimpleNamespace(
+        AutoModelForSpeechSeq2Seq=types.SimpleNamespace(from_pretrained=lambda *a, **kw: Model()),
+        AutoProcessor=types.SimpleNamespace(from_pretrained=lambda *a, **kw: processor),
+    ))
+    turns = transcribe_turns(short_wav, [(0, 0.5, "s0"), (0.5, 1.0, "s1")])
     assert [turn["text"] for turn in turns] == ["Начало", "Важное решение"]
-    assert [(turn["start"], turn["end"]) for turn in turns] == [(0.0, 0.4), (0.4, 1.0)]
-    assert lengths == [6400, 9600]
+    assert [(turn["start"], turn["end"]) for turn in turns] == [(0.0, 0.5), (0.5, 1.0)]
+    assert processor.lengths == [8000, 8000]
 
 
 def test_silence_has_no_transcript_and_does_not_load_asr(short_wav, monkeypatch):
