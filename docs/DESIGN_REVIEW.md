@@ -1,6 +1,6 @@
 # Decisions and implementation risks to revisit
 
-Review date: 2026-09-23. These are findings from the code and recorded test coverage, not a claim that every concern has been reproduced at runtime. Do not replace the whole application to address them; prefer targeted fixes backed by regression cases.
+Review date: 2026-09-23. This records initial code-review risks and notes subsequent targeted corrections. Historical findings are not all current defects or proof of real-model behavior. Prefer targeted regression cases to replacing the application.
 
 ## 1. Context budgeting and chunk boundaries — high priority
 
@@ -30,7 +30,7 @@ Reconsider: define candidate identity and verifier outcomes such as accepted, co
 
 Current files: `extraction.py`, `api.py`, `models.py`.
 
-Confident uniquely mapped participant names are converted to speaker IDs, enabling manual correction in displayed tasks. That improves the simple case but ties task identity to the diarization run. Reprocessing replaces tasks and their IDs/statuses. Manual mappings are retained by speaker label, although the same label can refer to a different person after a model/configuration change. Low-confidence name guesses are discarded rather than retained as reviewable suggestions.
+Confident uniquely mapped participant names are converted to speaker IDs, enabling manual correction in displayed tasks. That improves the simple case but ties task identity to the diarization run. Reprocessing creates fresh results, replacing task IDs/statuses; manual speaker mappings do **not** automatically carry across new diarization results. Low-confidence name guesses are discarded rather than retained as reviewable suggestions.
 
 Reconsider: keep source speaker identity, participant identity, inference provenance and manual override distinct. Preserve user edits against a processing revision, or explicitly create a new result version. Do not automatically transfer mappings between incompatible diarization runs. Decide how users should correct an assignee who never spoke and therefore has no speaker mapping. The current UI only edits task status, not task text/assignee/deadline.
 
@@ -38,7 +38,7 @@ Reconsider: keep source speaker identity, participant identity, inference proven
 
 Current file: `api.py`.
 
-The audio endpoint prefers an existing `normalized.wav` whenever the meeting is not actively processing. Failed meetings can accept new uploads, but upload does not invalidate the old normalized file. By code inspection, replacement after a failed run can therefore serve stale audio before reprocessing. A second editability check after writing an upload can raise a conflict outside the file-cleanup block, leaving an orphan. Audio-path and meeting-status writes are separate transactions. Upload limits are checked after the framework has already parsed/spooled multipart data.
+Historical finding: the earlier audio endpoint preferred an existing meeting-level `normalized.wav` and could serve stale output after upload replacement. The continuation moved normalized output to attempt-specific paths and added atomic upload/attempt transitions with focused regressions. Verify real replacement/retry and partial-normalization behavior before claiming complete lifecycle correctness. Upload limits are still checked after framework multipart parsing/spooling.
 
 Reconsider: identify audio revisions and use only normalized output belonging to the active source. Make generated-file cleanup and metadata transitions coherent, including rejected races. Enforce bounded incoming request bodies at the appropriate layer. Test replacement, two uploads, upload during processing, partial normalization and missing files. Never clean original data while cleaning runtime files.
 
@@ -70,7 +70,7 @@ Reconsider only after measurement: pin compatible versions, choose model/device 
 
 Current files: `api.py`, `processor.py`, `store.py`.
 
-One worker and a semaphore fit the demo. They are not cross-process locking. Shutdown waits for jobs, thread-based inference has no explicit cancellation, and some operations can run a long time. Full meeting records are loaded for task lookup and rewritten on updates. Current tests do not establish behavior under multiple processes or simultaneous updates. HTTP on a trusted LAN does not encrypt API keys in transit; loopback access without a key also merits Host/Origin handling review.
+A single-process OS lock is now acquired **before** restart recovery and prevents another instance from opening the same runtime; the in-process semaphore still limits heavy jobs to one. SQL freezes an admitted attempt's source and snapshot while execution status progresses. Shutdown waits for jobs, thread-based inference has no explicit cancellation, and some operations can run a long time. Full meeting records are loaded for task lookup and rewritten on updates. Tests do not establish all simultaneous update/race behavior. HTTP on a trusted LAN does not encrypt API keys in transit; loopback access without a key also merits Host/Origin handling review.
 
 Reconsider: keep the one-worker contract explicit; add bounded shutdown and coherent per-meeting mutation handling only as needed. Do not introduce Celery or PostgreSQL to solve a local demo's state transitions. Test Host/Origin/auth behavior without weakening loopback-only llama access. Keep sensitive diagnostics in local logs rather than public errors.
 
@@ -91,5 +91,7 @@ Pydantic forbids extra fields and non-finite numbers but is not globally strict.
 Reconsider: enforce important domain invariants explicitly, add practical field/output bounds, distinguish JSON syntax failures from transport/envelope failures, and test an installed wheel outside the source root. Render exports with long rows and Kazakh glyphs before declaring them presentation-ready. Prefer small checks over broad abstractions.
 
 ## What should remain simple
+
+The user subsequently selected explicit per-operation defaults and requested configurable model selection; follow [MODEL_SELECTION.md](MODEL_SELECTION.md). The continuation separates original model identities from runtime artifacts and freezes selections/sources per attempt. Shared CT2/parsed YAML weight validation, metadata-only checks for faster-whisper/CTranslate2/pyannote 3.x/torch/torchaudio/soundfile and bounded HTTP `127.0.0.1` `/models` plus read-only `/props` path checks are implemented. Public model labels/identities reject dot-segment paths as well as absolute paths, URLs and credentials. `/props` supplies a server-reported absolute `model_path` only, **not** a content/hash or accuracy guarantee; GET does not require `--props`. It replaced community-1/pyannote 4 default assumptions with diarization 3.1 and an **uninstalled** `pyannote.audio>=3.4,<4` range. The final offline suite had 117 passing tests (one deprecation warning); prescribed Ruff, source-only mypy, JS syntax and four Node behavioral tests passed. PyYAML 6.0.3 alone was newly installed. No real model, browser visual, rendered export or recorded-meeting run was performed. This remains a small configuration feature, not a general model marketplace or automatic cloud router.
 
 Keep local processing, separate llama-server, immutable originals, configurable CPU/GPU use, SQLite, bounded model calls and plain dashboard assets. The highest-value next step is a real integration run with measured errors, followed by targeted corrections. Do not turn these review notes into an excuse for another wholesale framework rewrite.

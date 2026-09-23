@@ -1,8 +1,9 @@
 from datetime import date
 from enum import StrEnum
+from typing import Annotated
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 
 def uid() -> str:
@@ -36,6 +37,30 @@ class ProcessingStatus(StrEnum):
     extracting = "extracting"
     completed = "completed"
     failed = "failed"
+
+
+ProfileId = Annotated[str, StringConstraints(
+    pattern=r"^[a-z0-9](?:[a-z0-9-]|\.[a-z0-9])*[a-z0-9]$", min_length=2, max_length=64, strict=True
+)]
+
+
+class ModelSelection(Model):
+    asr: ProfileId | None = None
+    diarization: ProfileId | None = None
+    extract_tasks: ProfileId | None = None
+    verify_tasks: ProfileId | None = None
+    resolve_speakers: ProfileId | None = None
+    generate_summary: ProfileId | None = None
+
+
+class ResolvedBindings(Model):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    asr: ProfileId
+    diarization: ProfileId
+    extract_tasks: ProfileId
+    verify_tasks: ProfileId
+    resolve_speakers: ProfileId
+    generate_summary: ProfileId
 
 
 class Participant(Model):
@@ -121,3 +146,7 @@ class Meeting(Model):
     tasks: list[MeetingTask] = Field(default_factory=list)
     decisions: list[MeetingDecision] = Field(default_factory=list)
     summary: MeetingSummary = Field(default_factory=MeetingSummary)
+    model_selection: ModelSelection = Field(default_factory=ModelSelection)
+    active_attempt_id: str | None = None
+    latest_attempt_id: str | None = None
+    results_attempt_id: str | None = None

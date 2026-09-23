@@ -1,10 +1,13 @@
 import gc
+import importlib
 import os
 import re
 import shutil
 import subprocess
+import tempfile
+from importlib import metadata
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from .config import Settings
 from .models import SpeakerTurn, TranscriptSegment
@@ -12,6 +15,119 @@ from .models import SpeakerTurn, TranscriptSegment
 
 class SetupError(RuntimeError):
     """Safe, actionable message that may be returned by the API."""
+
+
+def _profile_value(profile: Any, name: str, legacy: str | None = None) -> object:
+    """Read profile settings while retaining support for the original Settings API."""
+    if hasattr(profile, name):
+        return getattr(profile, name)
+    if legacy is not None and hasattr(profile, legacy):
+        return getattr(profile, legacy)
+    if name == "device":
+        return "cpu"
+    if name == "compute_type":
+        return "int8"
+    raise SetupError("The selected local model profile is incomplete. Select a valid profile.")
+
+
+def _local_artifact(profile: object, kind: str) -> Path:
+    value = _profile_value(profile, "runtime_artifact")
+    if not isinstance(value, str) or not value.strip():
+        raise SetupError(f"The {kind} profile has no local model artifact. Configure its local artifact path.")
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise SetupError(f"The {kind} model artifact is unavailable locally. Configure an absolute local model directory.")
+    if not path.is_dir():
+        raise SetupError(f"The {kind} model artifact is unavailable locally. Configure a complete local model directory.")
+    return path
+
+
+def _validate_ct2_artifact(path: Path) -> None:
+    required = ("config.json", "model.bin")
+    if not path.is_dir() or not all((path / name).is_file() for name in required) or not any(
+        (path / name).is_file() for name in ("tokenizer.json", "vocabulary.json")
+    ) or not (path / "preprocessor_config.json").is_file():
+        raise SetupError("The ASR artifact is not a complete local CTranslate2 model. Convert and bundle the model locally.")
+
+
+def _validate_diarization_artifact(path: Path) -> dict[str, Any]:
+    """Validate pipeline references and return a loader-ready config with absolute weight paths."""
+    config = path / "config.yaml"
+    if not config.is_file():
+        raise SetupError("The local diarization artifact must include config.yaml and all dependent weights.")
+    try:
+        text = config.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        raise SetupError("The local diarization config is invalid. Provide a complete local pipeline artifact.") from None
+    try:
+        yaml = importlib.import_module("yaml")
+    except ImportError:
+        raise SetupError("Install .[models] to validate the local diarization config before processing.") from None
+    try:
+        document = yaml.safe_load(text)
+    except yaml.YAMLError:
+        raise SetupError("The local diarization config is invalid. Provide a complete local pipeline artifact.") from None
+    message = "The diarization artifact references missing or remote dependencies. Bundle local weight files."
+    if not isinstance(document, dict) or not isinstance(document.get("pipeline"), dict):
+        raise SetupError(message)
+    params = document["pipeline"].get("params")
+    if not isinstance(params, dict):
+        raise SetupError(message)
+
+    def local_file(value: object) -> str:
+        if not isinstance(value, str) or not value.strip() or any(c in value for c in "\x00\r\n"):
+            raise SetupError(message)
+        if "://" in value or "@" in value or re.match(r"^[A-Za-z]:(?![/\\])", value):
+            raise SetupError(message)
+        candidate = Path(value).expanduser()
+        if not candidate.is_absolute():
+            candidate = path / candidate
+        candidate = candidate.resolve()
+        if not candidate.is_file():
+            raise SetupError(message)
+        return str(candidate)
+
+    def reference(value: object) -> object:
+        if isinstance(value, str):
+            return local_file(value)
+        if isinstance(value, dict) and value and set(value) <= {"checkpoint_path", "pretrained", "weights"}:
+            return {key: local_file(child) for key, child in value.items()}
+        raise SetupError(message)
+
+    for key in ("segmentation", "embedding"):
+        if key not in params:
+            raise SetupError(message)
+        params[key] = reference(params[key])
+
+    def validate_extra_references(value: object) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key in {"segmentation", "embedding"}:
+                    value[key] = reference(child)
+                elif key in {"checkpoint_path", "pretrained", "weights", "model", "model_path"}:
+                    value[key] = local_file(child)
+                else:
+                    validate_extra_references(child)
+        elif isinstance(value, list):
+            for child in value:
+                validate_extra_references(child)
+
+    validate_extra_references(document)
+    return document
+
+
+def check_model_dependencies(kind: str) -> None:
+    """Metadata-only compatibility check; never imports heavyweight inference modules."""
+    packages = ("faster-whisper", "ctranslate2") if kind == "asr" else (
+        "pyannote.audio", "torch", "torchaudio", "soundfile"
+    )
+    for package in packages:
+        try:
+            version = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            raise SetupError("Install .[models] to process with the selected local model.") from None
+        if package == "pyannote.audio" and not re.match(r"^3\.[0-9]+(?:\.|$)", version):
+            raise SetupError("The selected diarization pipeline requires pyannote.audio 3.x.")
 
 
 def sanitize_filename(name: str) -> str:
@@ -89,21 +205,36 @@ def release_gpu() -> None:
 
 
 class FasterWhisperASR:
-    def __init__(self, settings: Settings):
-        self.settings = settings
+    def __init__(self, settings: Settings | Any):
+        self.profile = settings
 
     def transcribe(self, path: Path) -> list[TranscriptSegment]:
         offline()
+        if hasattr(self.profile, "model_identity"):
+            if _profile_value(self.profile, "backend") != "faster-whisper":
+                raise SetupError("The ASR profile requires a supported local backend.")
+            artifact = _local_artifact(self.profile, "ASR")
+            _validate_ct2_artifact(artifact)
+            device = _profile_value(self.profile, "device")
+            compute_type = _profile_value(self.profile, "compute_type")
+        else:
+            legacy_name = cast(str, _profile_value(self.profile, "asr_model"))
+            artifact = Path(legacy_name).expanduser()
+            if not artifact.is_dir():
+                raise SetupError("The ASR model must be available as a local CTranslate2 model directory.")
+            _validate_ct2_artifact(artifact)
+            device = _profile_value(self.profile, "asr_device")
+            compute_type = _profile_value(self.profile, "asr_compute_type")
         try:
             from faster_whisper import WhisperModel
 
             model = WhisperModel(
-                self.settings.asr_model,
-                device=self.settings.asr_device,
-                compute_type=self.settings.asr_compute_type,
+                str(artifact),
+                device=str(device),
+                compute_type=str(compute_type),
                 local_files_only=True,
             )
-        except (ImportError, OSError, ValueError):
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
             raise SetupError(
                 "Install .[models] and pre-download a faster-whisper model; set ASR_MODEL to its local directory."
             ) from None
@@ -131,41 +262,56 @@ class FasterWhisperASR:
 
 
 class PyannoteDiarizer:
-    def __init__(self, settings: Settings):
-        self.settings = settings
+    def __init__(self, settings: Settings | Any):
+        self.profile = settings
 
     def diarize(self, path: Path) -> list[SpeakerTurn]:
         offline()
-        if not self.settings.diarization_model:
-            raise SetupError(
-                "Set DIARIZATION_MODEL to a locally downloaded pyannote community-1 directory."
-            )
+        if hasattr(self.profile, "model_identity"):
+            if _profile_value(self.profile, "backend") != "pyannote":
+                raise SetupError("The diarization profile requires a supported local backend.")
+            artifact = _local_artifact(self.profile, "diarization")
+            device = _profile_value(self.profile, "device")
+        else:
+            model_path = _profile_value(self.profile, "diarization_model")
+            if not model_path:
+                raise SetupError("Configure a complete local speaker-diarization-3.1 artifact before processing.")
+            artifact = Path(str(model_path)).expanduser()
+            if not artifact.is_dir():
+                raise SetupError("The diarization model is unavailable locally. Configure a complete local model directory.")
+            device = _profile_value(self.profile, "diarization_device")
+        document = _validate_diarization_artifact(artifact)
         try:
             import soundfile as sf
             import torch
             from pyannote.audio import Pipeline
-
-            pipeline = Pipeline.from_pretrained(self.settings.diarization_model)
-            pipeline.to(torch.device(self.settings.diarization_device))
-        except (ImportError, OSError, ValueError):
+            yaml = importlib.import_module("yaml")
+            # Pipeline.from_pretrained(3.x) accepts a config file; relative references
+            # have already been resolved without changing the process working directory.
+            with tempfile.TemporaryDirectory(prefix="meeting-pipeline-") as staging:
+                localized = Path(staging) / "config.yaml"
+                localized.write_text(yaml.safe_dump(document), encoding="utf-8")
+                pipeline = Pipeline.from_pretrained(str(localized))
+                try:
+                    pipeline.to(torch.device(str(device)))
+                    waveform, rate = sf.read(path, dtype="float32", always_2d=True)
+                    output = pipeline(
+                        {"waveform": torch.from_numpy(waveform.T.copy()), "sample_rate": rate}
+                    )
+                    annotation = getattr(output, "exclusive_speaker_diarization", None)
+                    if annotation is None:
+                        annotation = getattr(output, "speaker_diarization", output)
+                    return [
+                        SpeakerTurn(speaker=label, start=turn.start, end=turn.end)
+                        for turn, _, label in annotation.itertracks(yield_label=True)
+                    ]
+                finally:
+                    del pipeline
+                    release_gpu()
+        except (ImportError, OSError, RuntimeError, TypeError, ValueError):
             raise SetupError(
                 "Install .[models] and download all diarization weights before offline processing."
             ) from None
-        try:
-            waveform, rate = sf.read(path, dtype="float32", always_2d=True)
-            output = pipeline(
-                {"waveform": torch.from_numpy(waveform.T.copy()), "sample_rate": rate}
-            )
-            annotation = getattr(output, "exclusive_speaker_diarization", None)
-            if annotation is None:
-                annotation = getattr(output, "speaker_diarization", output)
-            return [
-                SpeakerTurn(speaker=label, start=turn.start, end=turn.end)
-                for turn, _, label in annotation.itertracks(yield_label=True)
-            ]
-        finally:
-            del pipeline
-            release_gpu()
 
 
 def merge_speakers(

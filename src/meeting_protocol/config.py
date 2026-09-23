@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     asr_compute_type: str = "int8"
     diarization_model: str = ""
     diarization_device: str = "cpu"
+    model_profiles_json: str = ""
+    model_default_bindings_json: str = ""
+    asr_model_artifact: Path = Path("models/whisper-large-v3-turbo-ct2")
+    diarization_model_artifact: Path = Path("models/pyannote-speaker-diarization-3.1")
+    model_path: Path = ROOT / "Qwen3.5-4B-UD-Q6_K_XL.gguf"
     data_root: Path = Path("data")
     database_path: Path = Path("data/app.db")
     max_upload_bytes: int = Field(524288000, gt=0)

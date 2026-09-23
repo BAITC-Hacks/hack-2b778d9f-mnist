@@ -29,6 +29,7 @@ pytest-asyncio==0.26.0
 python-docx==1.2.0
 python-dotenv==1.2.3
 python-multipart==0.0.32
+PyYAML==6.0.3
 reportlab==4.5.1
 ruff==0.16.8
 starlette==1.7.0

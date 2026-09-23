@@ -23,11 +23,13 @@ from meeting_protocol.models import (
     Meeting,
     MeetingSummary,
     MeetingTask,
+    ModelSelection,
     ProcessingStatus,
     SpeakerTurn,
     TranscriptSegment,
 )
 from meeting_protocol.processor import Processor
+from meeting_protocol.profiles import ProfileError
 from meeting_protocol.store import Store
 
 
@@ -292,10 +294,14 @@ def test_exports(transcript):
 async def test_processor(settings, transcript, monkeypatch):
     import meeting_protocol.processor as module
 
+    normalized = []
+
     def normalize(source, target, executable):
+        normalized.append(source)
         target.write_bytes(b"normalized")
 
     monkeypatch.setattr(module, "normalize_audio", normalize)
+    monkeypatch.setattr(module.shutil, "which", lambda executable: executable)
 
     class ASR:
         def transcribe(self, path):
@@ -308,12 +314,30 @@ async def test_processor(settings, transcript, monkeypatch):
     store = Store(settings.database_path)
     meeting = Meeting(title="Full pipeline", meeting_date=date(2026, 9, 23))
     store.save(meeting)
+    processor = Processor(settings, store, ASR(), Diarizer(), FakeLLM())
+    await processor.run(meeting.id)  # Meeting IDs are not executable attempts, even with injected adapters.
+    assert store.get(meeting.id).status == ProcessingStatus.created
     source = settings.data_root.parent / "source.wav"
     source.write_bytes(b"audio")
-    store.set_audio(meeting.id, source)
-    await Processor(settings, store, ASR(), Diarizer(), FakeLLM()).run(meeting.id)
+    store.attach_audio(meeting.id, source)
+    selection = ModelSelection()
+    snapshot = processor.catalog.resolve(selection)
+
+    async def preflight(accepted):
+        assert accepted == snapshot
+
+    monkeypatch.setattr(processor.catalog, "preflight", preflight)
+    attempt = store.admit_attempt(meeting.id, snapshot, selection,
+                                  expected_body=store.get(meeting.id).model_dump_json(),
+                                  expected_audio=source)
+    await processor.run(attempt.id)
+    await processor.run(attempt.id)  # A completed attempt is not claimed twice.
     result = store.get(meeting.id)
     assert result.status == ProcessingStatus.completed
+    assert result.results_attempt_id == attempt.id
+    assert store.get_attempt(attempt.id).snapshot == snapshot
+    assert store.get_attempt(attempt.id).source_audio == source.resolve()
+    assert normalized == [source.resolve()]
     assert result.transcript and result.summary.text and len(result.tasks) == 1
     assert Store(settings.database_path).get(meeting.id).summary == result.summary
 
@@ -346,11 +370,37 @@ async def test_inferred_names_remain_correctable(transcript):
     assert display_name(meeting, meeting.tasks[0].assignee) == "Corrected participant"
 
 
-async def test_missing_diarization_is_actionable(settings):
+async def test_missing_diarization_is_actionable(settings, monkeypatch):
+    import meeting_protocol.processor as module
+    from meeting_protocol import profiles
+
+    settings.diarization_model_artifact = settings.data_root.parent / "missing-pipeline"
     store = Store(settings.database_path)
     meeting = Meeting(title="No model")
     store.save(meeting)
-    await Processor(settings, store).run(meeting.id)
+    source = settings.data_root.parent / "source.wav"
+    source.write_bytes(b"audio")
+    store.attach_audio(meeting.id, source)
+    processor = Processor(settings, store)
+    selection = ModelSelection()
+    snapshot = processor.catalog.resolve(selection)
+    # Skip unrelated ASR dependencies but run the real diarization artifact validation.
+    monkeypatch.setattr(profiles, "_validate_ct2_artifact", lambda path: None)
+    monkeypatch.setattr(profiles, "check_model_dependencies", lambda kind: None)
+    monkeypatch.setattr(module.shutil, "which", lambda executable: executable)
+    heavy_calls = []
+    monkeypatch.setattr(module, "normalize_audio", lambda *args: heavy_calls.append(args))
+    monkeypatch.setattr(processor.asr, "transcribe", lambda path: heavy_calls.append(path))
+    with pytest.raises(ProfileError) as missing:
+        await processor.catalog.preflight(snapshot)
+    assert missing.value.code == "missing_files"
+    assert missing.value.slot == "diarization"
+    attempt = store.admit_attempt(meeting.id, snapshot, selection,
+                                  expected_body=store.get(meeting.id).model_dump_json(),
+                                  expected_audio=source)
+    await processor.run(attempt.id)
     saved = store.get(meeting.id)
     assert saved.status == ProcessingStatus.failed
-    assert "DIARIZATION_MODEL" in saved.error
+    assert saved.error == "Selected model setup is unavailable"
+    assert store.get_attempt(attempt.id).status == "failed"
+    assert heavy_calls == []
