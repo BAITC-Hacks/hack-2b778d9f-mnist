@@ -70,7 +70,11 @@ def export_draft(meeting: dict, output_dir: Path, *, include_pdf: bool = True) -
     docx_path, pdf_path = output_dir / "draft.docx", output_dir / "draft.pdf"
     pdf_path.unlink(missing_ok=True)
     document = Document()
+    document.core_properties.title = "Протокол совещания — Итоги встречи: решения и поручения"
+    document.core_properties.author = "Jinalys AI"
+    document.add_paragraph("Jinalys AI · От встречи к решениям", style="Subtitle")
     document.add_heading("Черновик протокола", level=0)
+    document.add_paragraph("Итоги встречи: решения и поручения", style="Subtitle")
     document.add_paragraph("Документ требует проверки и утверждения уполномоченным лицом.")
     document.add_paragraph(f"Дата совещания: {meeting['meeting_date']}")
     document.add_heading("Участники", level=1)

@@ -95,6 +95,7 @@ it('saves only changed fields, prevents edits during save, and starts a new meet
   render(<App/>);
   const summary = await screen.findByLabelText('Краткое содержание');
   fireEvent.change(summary, {target: {value: 'Проверенное содержание'}});
+  fireEvent.click(screen.getByRole('tab', {name: 'Экспорт'}));
   expect(screen.getByRole('button', {name: 'Создать DOCX'}).matches(':disabled')).toBe(true);
   expect(screen.getByRole('button', {name: 'Новая запись'}).matches(':disabled')).toBe(true);
   fireEvent.click(screen.getByRole('button', {name: 'Сохранить правки'}));
@@ -198,6 +199,7 @@ it('keeps the reviewed draft after a save failure', async () => {
   expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Не удалось сохранить');
   expect(screen.getByDisplayValue('Важные правки')).toBeTruthy();
   expect(screen.getByRole('button', {name: 'Сохранить правки'}).matches(':disabled')).toBe(false);
+  fireEvent.click(screen.getByRole('tab', {name: 'Экспорт'}));
   expect(screen.getByRole('button', {name: 'Создать DOCX'}).matches(':disabled')).toBe(true);
 });
 
@@ -206,7 +208,8 @@ it('offers DOCX independently and preserves its download when PDF conversion fai
     docx: '/meetings/demo/export/docx', pdf: null, warning: 'PDF недоступен; DOCX готов.',
   });
   render(<App/>);
-  fireEvent.click(await screen.findByRole('button', {name: 'Создать DOCX и PDF'}));
+  fireEvent.click(await screen.findByRole('tab', {name: 'Экспорт'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Создать DOCX и PDF'}));
   const download = await screen.findByRole('link', {name: 'Скачать DOCX'});
   expect(download.getAttribute('href')).toBe('/meetings/demo/export/docx');
   expect(screen.queryByRole('link', {name: 'Скачать PDF'})).toBeNull();
@@ -220,7 +223,8 @@ it('blocks edits during export and exposes an export error without losing the dr
   let failExport!: (error: Error) => void;
   vi.mocked(exportMeeting).mockReturnValue(new Promise((_resolve, reject) => { failExport = reject; }));
   render(<App/>);
-  fireEvent.click(await screen.findByRole('button', {name: 'Создать DOCX'}));
+  fireEvent.click(await screen.findByRole('tab', {name: 'Экспорт'}));
+  fireEvent.click(screen.getByRole('button', {name: 'Создать DOCX'}));
   expect(screen.getByLabelText('Реплика t1').matches(':disabled')).toBe(true);
   await act(async () => failExport(new Error('Документ не создан')));
   expect(screen.getByRole('alert').textContent).toBe('Документ не создан');
@@ -230,7 +234,8 @@ it('blocks edits during export and exposes an export error without losing the dr
 
 it('plays only the selected transcript fragment and reports playback failures', async () => {
   const {container} = render(<App/>);
-  const play = await screen.findByRole('button', {name: 'Прослушать фрагмент'});
+  fireEvent.click(await screen.findByRole('tab', {name: 'Стенограмма'}));
+  const play = screen.getByRole('button', {name: 'Прослушать фрагмент'});
   const audio = container.querySelector('audio')!;
   fireEvent.click(play);
   expect(audio.currentTime).toBe(2);
@@ -241,4 +246,30 @@ it('plays only the selected transcript fragment and reports playback failures', 
   vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new Error('Unsupported audio'));
   fireEvent.click(play);
   expect((await screen.findByRole('alert')).textContent).toContain('Не удалось воспроизвести запись');
+});
+
+
+it('shows one section at a time and keeps unsaved edits when switching tabs', async () => {
+  render(<App/>);
+  await screen.findByRole('tab', {name: 'Обзор'});
+  expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+  expect(screen.getByRole('tabpanel').getAttribute('id')).toBe('panel-overview');
+  fireEvent.change(screen.getByLabelText('Краткое содержание'), {target: {value: 'Сохранить этот текст'}});
+  fireEvent.click(screen.getByRole('tab', {name: 'Поручения'}));
+  expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+  expect(screen.getByRole('tabpanel').getAttribute('id')).toBe('panel-actions');
+  fireEvent.click(screen.getByRole('tab', {name: 'Обзор'}));
+  expect(screen.getByLabelText('Краткое содержание')).toHaveProperty('value', 'Сохранить этот текст');
+  expect(screen.getByRole('button', {name: 'Сохранить правки'}).matches(':disabled')).toBe(false);
+});
+
+it('navigates sections with the keyboard and plays evidence in the transcript section', async () => {
+  render(<App/>);
+  const overview = await screen.findByRole('tab', {name: 'Обзор'});
+  fireEvent.keyDown(overview, {key: 'ArrowDown'});
+  expect(screen.getByRole('tab', {name: 'Стенограмма'}).getAttribute('aria-selected')).toBe('true');
+  fireEvent.click(screen.getByRole('tab', {name: 'Поручения'}));
+  fireEvent.click(screen.getAllByRole('button', {name: 'Прослушать t1'})[0]);
+  expect(screen.getByRole('tabpanel').getAttribute('id')).toBe('panel-transcript');
+  expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
 });

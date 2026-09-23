@@ -4,6 +4,11 @@ import {
   type Action, type Exports, type Meeting, type MeetingEdits, type Turn,
 } from './api';
 
+const tabs = [{id: 'overview', label: 'Обзор', mark: '01'}, {id: 'transcript', label: 'Стенограмма', mark: '02'},
+  {id: 'people', label: 'Участники', mark: '03'}, {id: 'actions', label: 'Поручения', mark: '04'},
+  {id: 'export', label: 'Экспорт', mark: '05'}] as const;
+type Tab = typeof tabs[number]['id'];
+
 const editableFields = ['roster', 'summary', 'transcript', 'actions', 'speaker_names'] as const;
 const actionFields = ['text', 'assignee', 'deadline_phrase', 'due_date', 'source_turn_ids', 'confirmation_turn_ids'] as const;
 const parseRoster = (text: string) => [...new Set(text.split(/[,\n]/).map(name => name.trim()).filter(Boolean))];
@@ -55,7 +60,7 @@ function EvidencePicker({title, selected, turns, names, onChange, onPlay}: {
     {selected.map(id => {
       const turn = turns.find(item => item.id === id);
       return turn && <blockquote key={id}>
-        <a href={`#turn-${id}`}>{id} · {speakerName(turn, names)}</a>: {turn.text}
+        <a href={`#turn-${id}`} onClick={() => onPlay(id)}>{id} · {speakerName(turn, names)}</a>: {turn.text}
         {' '}<button type="button" className="textbutton" onClick={() => onPlay(id)}>Прослушать {id}</button>
       </blockquote>;
     })}
@@ -71,6 +76,8 @@ function EvidencePicker({title, selected, turns, names, onChange, onPlay}: {
 }
 
 export default function App() {
+  const [tab, setTab] = useState<Tab>('overview');
+  const [operation, setOperation] = useState<'save' | 'export' | null>(null);
   const [initialId] = useState(() => new URLSearchParams(location.search).get('meeting'));
   const [loading, setLoading] = useState(!!initialId);
   const [meeting, setMeeting] = useState<Meeting | null>(null);
@@ -157,7 +164,7 @@ export default function App() {
       acceptMeeting(created);
       acceptMeeting(await startProcessing(created.id));
     } catch (error) { setError(message(error)); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setOperation(null); }
   }
 
   async function retry() {
@@ -165,13 +172,14 @@ export default function App() {
     setBusy(true); setError('');
     try { acceptMeeting(await startProcessing(id)); }
     catch (error) { setError(message(error)); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setOperation(null); }
   }
 
   function newMeeting() {
     if (busy || dirty) return;
     audio.current?.pause(); fragmentEnd.current = null;
     setMeeting(null); setDraft(null); setExports(null); setError(''); setNotice('');
+    setTab('overview');
     history.replaceState(null, '', location.pathname);
   }
 
@@ -212,27 +220,29 @@ export default function App() {
     if (validation) { setError(validation); return; }
     const changes: MeetingEdits = Object.fromEntries(editableFields
       .filter(key => !same(meeting[key], draft[key])).map(key => [key, draft[key]]));
-    setBusy(true); setError('');
+    setBusy(true); setOperation('save'); setError('');
     try {
       acceptMeeting(await saveMeeting(id, changes)); setExports(null);
       setNotice(evidenceChanged || changedActions.some(Boolean)
         ? 'Правки сохранены. Проверьте подтверждение поручений по обновлённым данным.'
         : 'Правки сохранены.');
     } catch (error) { setError(message(error)); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setOperation(null); }
   }
 
   async function generate(format: 'docx' | 'pdf') {
     if (!id || busy || dirty) return;
-    setBusy(true); setError(''); setNotice('');
+    setBusy(true); setOperation('export'); setError(''); setNotice('');
     try { setExports(await exportMeeting(id, format)); }
     catch (error) { setError(message(error)); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setOperation(null); }
   }
 
   async function seek(turnId: string) {
     const turn = draft?.transcript.find(item => item.id === turnId);
     if (!turn || !audio.current) return;
+    setTab('transcript');
+    window.setTimeout(() => document.getElementById(`turn-${turnId}`)?.scrollIntoView?.({block: 'center', behavior: 'smooth'}), 0);
     try {
       fragmentEnd.current = turn.end;
       audio.current.currentTime = turn.start;
@@ -249,10 +259,10 @@ export default function App() {
   ])] : [];
 
   return <main className="shell">
-    <header>
-      <div className="eyebrow">HackAlem · рабочий черновик</div>
-      <h1>Протокол совещания</h1>
-      <p>Загрузите разрешённую запись, проверьте реплики и поручения, затем сохраните черновик для согласования.</p>
+    <header className="page-header">
+      <div className="eyebrow"><span className="brand-mark">J</span> Jinalys AI</div>
+      <h1>Jinalys AI</h1>
+      <p>От встречи к решениям — с проверкой каждого поручения.</p>
       {meeting && <button className="secondary" onClick={newMeeting} disabled={busy || dirty}>Новая запись</button>}
     </header>
     {error && <div role="alert" className="notice error">{error}</div>}
@@ -271,7 +281,7 @@ export default function App() {
       </form>
     </section>}
     {meeting && <>
-      <section className="card status">
+      <section className={`card status status-${meeting.status}`}>
         <div><span className="eyebrow">{meeting.meeting_date}</span>
           <h2>{meeting.status === 'review' ? 'Черновик готов к проверке'
             : meeting.status === 'failed' ? 'Обработка прервана'
@@ -284,8 +294,32 @@ export default function App() {
         {['queued', 'processing'].includes(meeting.status) && <p>Результат появится автоматически. Ссылку на эту страницу можно сохранить.</p>}
       </section>
       {meeting.status === 'review' && draft && <>
-        <section className="card">
-          <h2>Исходная запись</h2>
+        <div className="workspace">
+          <aside className="sidebar">
+            <div className="sidebar-title">Разделы протокола</div>
+            <nav role="tablist" aria-label="Разделы протокола" aria-orientation="vertical"
+              onKeyDown={event => {
+                const position = tabs.findIndex(item => item.id === tab);
+                const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                  : ['ArrowDown', 'ArrowRight'].includes(event.key) ? (position + 1) % tabs.length
+                    : ['ArrowUp', 'ArrowLeft'].includes(event.key) ? (position + tabs.length - 1) % tabs.length : -1;
+                if (next < 0) return;
+                event.preventDefault(); setTab(tabs[next].id);
+                document.getElementById(`tab-${tabs[next].id}`)?.focus();
+              }}>
+              {tabs.map(item => <button key={item.id} id={`tab-${item.id}`} role="tab"
+                aria-selected={tab === item.id} aria-controls={`panel-${item.id}`}
+                tabIndex={tab === item.id ? 0 : -1} onClick={() => setTab(item.id)}>
+                <span className="nav-number" aria-hidden="true">{item.mark}</span>{item.label}
+                {item.id === 'transcript' && <span className="nav-count" aria-hidden="true">{draft.transcript.length}</span>}
+                {item.id === 'actions' && <span className="nav-count" aria-hidden="true">{draft.actions.length}</span>}
+              </button>)}
+            </nav>
+            <p className="sidebar-note">Проверьте результат перед согласованием. Правки сохраняются одной кнопкой.</p>
+          </aside>
+          <div className="workspace-content">
+        <section className="audio-bar" aria-label="Исходная запись">
+          <div className="audio-label"><span className="eyebrow">Аудиозапись</span><strong>Слушайте и сверяйте</strong></div>
           <audio ref={audio} controls src={`/meetings/${encodeURIComponent(meeting.id)}/audio`}
             onError={() => setError('Не удалось загрузить аудио. Проверьте соединение и обновите страницу.')}
             onTimeUpdate={() => {
@@ -293,11 +327,10 @@ export default function App() {
                 audio.current.pause(); fragmentEnd.current = null;
               }
             }} onPause={() => { fragmentEnd.current = null; }}/>
-          <p className="hint">Кнопка у реплики воспроизводит её фрагмент. Время может требовать проверки.</p>
         </section>
         <fieldset disabled={busy} className="review-fields" aria-label="Редактирование протокола">
-          <section className="card">
-            <h2>Участники и голоса</h2>
+          <section className="card tab-panel" id="panel-people" role="tabpanel" aria-labelledby="tab-people" hidden={tab !== 'people'}>
+            <div className="panel-heading"><span className="eyebrow">Кто участвовал</span><h2>Участники и голоса</h2></div>
             <label>Список участников<textarea value={rosterText} onChange={event => {
               setRosterText(event.target.value); edit({roster: parseRoster(event.target.value)});
             }}/></label>
@@ -308,8 +341,8 @@ export default function App() {
                 onChange={event => edit({speaker_names: {...draft.speaker_names, [speaker]: event.target.value}})}/>
             </label>)}
           </section>
-          <section className="card">
-            <h2>Реплики</h2>
+          <section className="card tab-panel" id="panel-transcript" role="tabpanel" aria-labelledby="tab-transcript" hidden={tab !== 'transcript'}>
+            <div className="panel-heading"><span className="eyebrow">Текст записи</span><h2>Реплики <span className="heading-count">{draft.transcript.length}</span></h2><p className="hint">Слушайте фрагменты, исправляйте текст и уточняйте говорящих.</p></div>
             {!draft.transcript.length && <p className="hint">Речь не распознана. Проверьте исходную запись.</p>}
             {draft.transcript.map((turn, index) => <article className="turn" id={`turn-${turn.id}`} key={turn.id}>
               <div className="turnhead">
@@ -332,12 +365,19 @@ export default function App() {
               })}/>
             </article>)}
           </section>
-          <section className="card">
-            <h2>Краткое содержание</h2>
+          <section className="card tab-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={tab !== 'overview'}>
+            <div className="panel-heading"><span className="eyebrow">Результат встречи</span><h2>Обзор совещания</h2><p className="hint">Начните с содержания, затем проверьте реплики и поручения.</p></div>
+            <div className="stats-grid">
+              <button className="stat" onClick={() => setTab('transcript')}><strong>{draft.transcript.length}</strong><span>Реплик в записи ↗</span></button>
+              <button className="stat" onClick={() => setTab('people')}><strong>{speakers.length}</strong><span>Различимых голосов ↗</span></button>
+              <button className="stat" onClick={() => setTab('actions')}><strong>{draft.actions.filter(action => action.needs_review).length}</strong><span>Поручений на проверку ↗</span></button>
+            </div>
+            <h3>Краткое содержание</h3>
             <textarea aria-label="Краткое содержание" value={draft.summary} onChange={event => edit({summary: event.target.value})}/>
           </section>
-          <section className="card">
-            <h2>Поручения и кандидаты</h2>
+          <section className="card tab-panel" id="panel-actions" role="tabpanel" aria-labelledby="tab-actions" hidden={tab !== 'actions'}>
+            <div className="panel-heading"><span className="eyebrow">Решения и ответственность</span><h2>Поручения и кандидаты <span className="heading-count">{draft.actions.length}</span></h2></div>
+            {!draft.actions.length && <div className="empty-state">Поручений пока нет. Добавьте кандидат, если действие было согласовано в записи.</div>}
             <p className="hint">Проверьте действие, ответственного, срок и подтверждение. Непроверенные кандидаты попадут в раздел «На уточнение».</p>
             {evidenceChanged && <p className="notice">Сначала сохраните изменения реплик и участников, затем подтвердите поручения.</p>}
             {draft.actions.map((action, index) => <article className="action" key={index} aria-label={`Поручение ${index + 1}`}>
@@ -373,15 +413,17 @@ export default function App() {
               source_turn_ids: [], confirmation_turn_ids: [], confirmation_checked: false, needs_review: true,
             }]})}>Добавить кандидат</button>
           </section>
-          <section className="card actionsbar">
-            <button onClick={save} disabled={!dirty}>Сохранить правки</button>
+          <section className="card tab-panel" id="panel-export" role="tabpanel" aria-labelledby="tab-export" hidden={tab !== 'export'}>
+            <div className="panel-heading"><span className="eyebrow">Документ для согласования</span><h2>Экспорт протокола</h2><p className="hint">Скачайте черновик после проверки. Непроверенные поручения останутся в разделе «На уточнение».</p></div>
+            <div className="export-options"><div><strong>DOCX</strong><p>Редактируемый документ для согласования.</p></div><div><strong>PDF</strong><p>Документ для чтения и печати, если конвертер доступен.</p></div></div>
+            <div className="downloads">
             <button className="secondary" onClick={() => void generate('docx')} disabled={dirty}>Создать DOCX</button>
-            <button className="secondary" onClick={() => void generate('pdf')} disabled={dirty}>Создать DOCX и PDF</button>
+            <button className="secondary" onClick={() => void generate('pdf')} disabled={dirty}>Создать DOCX и PDF</button></div>
             {dirty && <p className="hint">Сохраните правки перед экспортом или загрузкой новой записи.</p>}
-            {busy && <p role="status">Сохранение или подготовка документа…</p>}
+            {operation === 'export' && <p role="status">Подготовка документа…</p>}
           </section>
         </fieldset>
-        {exports && <section className="card">
+        {exports && <section className="card" hidden={tab !== 'export'}>
           <h2>Черновик для согласования</h2>
           {exports.warning && <p role="status" className="notice">{exports.warning}</p>}
           <div className="downloads"><a href={exports.docx}>Скачать DOCX</a>
@@ -389,6 +431,12 @@ export default function App() {
           </div>
           <p className="hint">Документ станет официальным протоколом после утверждения уполномоченным лицом.</p>
         </section>}
+          </div>
+        </div>
+        <div className="save-bar">
+          <div><strong>{dirty ? 'Есть несохранённые изменения' : 'Все изменения сохранены'}</strong><span>{dirty ? 'Сохраните перед экспортом и новой записью.' : 'Можно продолжить проверку или перейти к экспорту.'}</span></div>
+          <button onClick={save} disabled={!dirty || busy}>{operation === 'save' ? 'Сохранение…' : 'Сохранить правки'}</button>
+        </div>
       </>}
     </>}
   </main>;
