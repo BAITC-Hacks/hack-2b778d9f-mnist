@@ -1,6 +1,10 @@
 # Jinalys AI
 
-## 1. Название проекта - **Jinalys AI**
+<p align="center">
+  <img src="docs/assets/jinalys-ai-hero.png"
+       alt="Jinalys AI — от встречи к решениям"
+       width="100%">
+</p>
 
 *От встречи к решениям.*
 
