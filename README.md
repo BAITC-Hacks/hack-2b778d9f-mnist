@@ -1,7 +1,7 @@
 # Jinalys AI
 
 <p align="center">
-  <img src="docs/jinalys-ai-hero.png"
+  <img src="docs/image.png"
        alt="Jinalys AI — от встречи к решениям"
        width="100%">
 </p>
